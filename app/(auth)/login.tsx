@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import {
   View,
   Text,
@@ -184,3 +185,8 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 });
+=======
+// app/(auth)/login.tsx
+import LoginScreen from "@/src/features/auth/screens/LoginScreen";
+export default LoginScreen;
+>>>>>>> main
