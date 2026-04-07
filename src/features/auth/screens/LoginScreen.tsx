@@ -63,7 +63,7 @@ export default function Login() {
 
   const { login } = auth;
 
-  const handleLogin = async () => {
+  const handleLogin = async () => { 
   if (!validate()) return;
 
   setLoading(true); // 👈 start loading
