@@ -14,7 +14,7 @@ import { AuthContext } from "@/src/core/context/AuthContext";
 import { loginApi } from "../services/authApi";
 import { router } from "expo-router";
 import { useState } from "react";
-import { setTokens } from "@/src/utils/tokenStorage";
+import { getRefreshToken, setTokens } from "@/src/utils/tokenStorage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type AuthType = {
@@ -70,10 +70,18 @@ export default function Login() {
 
   try {
     const data = await loginApi(userId, password);
-    await setTokens(data);
-    const userData = {
+    await setTokens({
   token: data.token,
+  refreshToken: data.refreshToken,
+});
+// const refresh = await getRefreshToken();
+// console.log("REFRESH AFTER SAVE:", refresh);
+
+const userData = {
+  token: data.token,
+  refreshToken: data.refreshToken,
   role: data.role,
+  vendorId: data.vendorId,
 };
 
 await AsyncStorage.setItem("user", JSON.stringify(userData));

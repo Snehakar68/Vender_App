@@ -9,7 +9,7 @@ export const requestOtpApi = (email: string) =>
   apiClient.post("/api/auth/request-otp", { email });
 
 export const verifyOtpApi = (email: string, otp: string) =>
-  apiClient.post("/api/auth/verify-otp", {
+  apiClient.post("/api/auth/verify-otp", { 
     email, 
     emailOtp: otp,
   });

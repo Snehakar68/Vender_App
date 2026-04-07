@@ -33,7 +33,7 @@ export const clearTokens = async () => {
   await SecureStore.deleteItemAsync(REFRESH_TOKEN);
 };
 export const isTokenExpired = (token: string) => {
-  try {
+  try { 
     const payload = JSON.parse(
       Buffer.from(token.split(".")[1], "base64").toString("utf-8")
     );

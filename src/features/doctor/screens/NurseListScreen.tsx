@@ -8,8 +8,15 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AppHeader from "@/src/shared/components/AppHeader";
+import { Modal } from "react-native";
+import { useState } from "react";
+
+
 
 export default function NurseListScreen() {
+  const [open, setOpen] = useState(false);
+const [selectedNurse, setSelectedNurse] = useState(null);
+
   const nurses = [
     {
       name: "ashwani sdf",
@@ -53,14 +60,14 @@ return (
       keyboardShouldPersistTaps="handled"
     >
       
-      {/* HEADER */}
+      {/* HEADER */} 
       {/* <View style={styles.header}> */}
-        <AppHeader
+    <AppHeader
   title="Nurses"
   subtitle="Manage your staff"
   icon="people-outline"
   actionText="+ Add"
-  onActionPress={() => {}}
+  onActionPress={() => setOpen(true)} // 🔥 OPEN MODAL
 />
         {/* <View>
           <Text style={styles.brand}>Jhilmil Homecare</Text>
@@ -129,6 +136,45 @@ return (
   </View>
 ))}
         </ScrollView>
+        <Modal visible={open} transparent animationType="fade">
+  <View style={styles.modalOverlay}>
+    <View style={styles.modalContainer}>
+      
+      {/* LABEL */}
+   <View style={styles.labelRow}>
+  <Text style={styles.label}>Select Nurse</Text>
+  <Text style={styles.required}> *</Text>
+</View>
+
+      {/* SELECT (Simple version) */}
+      <TouchableOpacity style={styles.selectBox}>
+        <Text style={{ color: "#64748B" }}>
+          {selectedNurse || "Select Nurse"}
+        </Text>
+      </TouchableOpacity>
+
+      {/* BUTTONS */}
+      <View style={styles.modalActions}>
+        <TouchableOpacity
+          style={styles.cancelBtn}
+          onPress={() => setOpen(false)}
+        >
+          <Text style={styles.cancelText}>Cancel</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.addBtnModal}
+          onPress={() => {
+            // 🔥 call your API here (handleAddNurse)
+            setOpen(false);
+          }}
+        >
+          <Text style={styles.addText}>Add</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </View>
+</Modal>
   </SafeAreaView>
 );
 }
@@ -228,12 +274,6 @@ iconBtn: {
   detailRow: {
     flexDirection: "row",
     marginBottom: 4,
-  },
-
-  label: {
-    fontSize: 12,
-    color: "#64748B",
-    width: 70,
   },
 
   value: {
@@ -340,5 +380,84 @@ viewProfileText: {
   color: "#0F766E",
   fontWeight: "600",
   fontSize: 13,
+},
+modalOverlay: {
+  flex: 1,
+  backgroundColor: "rgba(0,0,0,0.4)",
+  justifyContent: "center",
+  alignItems: "center",
+},
+
+modalContainer: {
+  width: "90%",
+  backgroundColor: "#fff",
+  borderRadius: 16,
+  padding: 20,
+  shadowColor: "#000",
+  shadowOpacity: 0.1,
+  shadowRadius: 10,
+  elevation: 5,
+},
+
+selectBox: {
+  borderWidth: 1,
+  borderColor: "#E2E8F0",
+  borderRadius: 10,
+  padding: 12,
+  marginBottom: 20,
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+},
+
+modalActions: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+},
+
+cancelBtn: {
+  flex: 1,
+  borderWidth: 1,
+  borderColor: "#E2E8F0",
+  paddingVertical: 12,
+  borderRadius: 10,
+  alignItems: "center",
+  marginRight: 10,
+  backgroundColor: "#F8FAFC", // 🔥 subtle fill
+},
+
+addBtnModal: {
+  flex: 1,
+  backgroundColor: "#16A34A",
+  paddingVertical: 12,
+  borderRadius: 10,
+  alignItems: "center",
+  elevation: 2, // 🔥 android shadow
+},
+cancelText: {
+  color: "#475569",
+  fontWeight: "500",
+},
+
+addText: {
+  color: "#fff",
+  fontWeight: "600",
+},
+labelRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  marginBottom: 8,
+},
+
+label: {
+  fontSize: 14,
+  fontWeight: "600",
+  color: "#0F172A",
+},
+
+required: {
+  color: "#DC2626",
+  fontSize: 14,
+  fontWeight: "700",
 },
 });

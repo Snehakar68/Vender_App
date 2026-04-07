@@ -8,8 +8,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import AppHeader from "@/src/shared/components/AppHeader";
+import { useState } from "react";
+import AddWorkDetailsModal from "./modals/AddWorkDetailsModal";
 
 export default function WorkDetailsScreen() {
+  const [open, setOpen] = useState(false);
   const data = [
     {
       name: "nknnk, Puranigudam - Assam",
@@ -86,31 +89,14 @@ export default function WorkDetailsScreen() {
 
         {/* HEADER */}
         {/* <View style={styles.header}> */}
-          <AppHeader
+       <AppHeader
   title="Work Details"
   subtitle="Manage schedule & fees"
   icon="briefcase-outline"
   actionText="+ Add"
-  onActionPress={() => {}}
+  onActionPress={() => setOpen(true)}
 />
-          {/* LEFT */}
-          {/* <View style={styles.headerLeft}>
-            <View style={styles.iconBox}>
-              <Ionicons name="briefcase-outline" size={18} color="#0F172A" />
-            </View>
-
-            <View>
-              <Text style={styles.headerTitle}>Work Details</Text>
-              <Text style={styles.headerSub}>View Work Details</Text>
-            </View>
-          </View> */}
-
-          {/* RIGHT BUTTON */}
-          {/* <TouchableOpacity style={styles.addBtn}>
-            <Ionicons name="add" size={16} color="#fff" />
-            <Text style={styles.addBtnText}>Add</Text>
-          </TouchableOpacity> */}
-        {/* </View> */}
+<AddWorkDetailsModal open={open} onClose={() => setOpen(false)} />
 
         {/* CARDS */}
         {data.map((item, index) => (
