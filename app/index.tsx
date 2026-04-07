@@ -14,12 +14,12 @@ export default function Splash() {
       const user = await AsyncStorage.getItem("user");
 
       // ❌ Not logged in
-      // if (!token || !user) {
-      //   router.replace("/(auth)/login");
-      //   return;
-      // }
-router.replace("/(auth)/login");
-return;
+      if (!token || !user) {
+        router.replace("/(auth)/login");
+        return;
+      }
+// router.replace("/(auth)/login");
+// return;
 
       const parsed = JSON.parse(user);
 
