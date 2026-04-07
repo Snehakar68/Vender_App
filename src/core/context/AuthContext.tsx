@@ -9,7 +9,9 @@ import { logout as logoutUtil } from "@/src/utils/logout";
 
 type UserType = {
   token: string;
-  role?: string;
+  refreshToken: string;
+  role: string;
+  vendorId: string;
 };
 
 type AuthType = {
@@ -29,15 +31,23 @@ useEffect(() => {
     const token = await getAccessToken();
     const storedUser = await AsyncStorage.getItem("user");
 
-    if (token && storedUser) {
-      if (isTokenExpired(token)) {
-        await clearTokens();
-        await AsyncStorage.removeItem("user");
-        return;
-      }
+  if (token && storedUser) {
+  if (isTokenExpired(token)) {
+    await clearTokens();
+    await AsyncStorage.removeItem("user");
+    return;
+  }
 
-      setUser(JSON.parse(storedUser));
-    }
+  const parsedUser = JSON.parse(storedUser);
+
+  if (!parsedUser.vendorId) {
+    await clearTokens();
+    await AsyncStorage.removeItem("user");
+    return;
+  }
+
+  setUser(parsedUser);
+}
   };
 
   loadUser();

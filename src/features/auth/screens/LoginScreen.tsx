@@ -5,7 +5,7 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
+  KeyboardAvoidingView, 
   Platform,
   ActivityIndicator,
 } from "react-native";
@@ -70,6 +70,8 @@ export default function Login() {
 
   try {
     const data = await loginApi(userId, password);
+    console.log("🔐 LOGIN API RESPONSE:", data);
+console.log("🆔 VENDOR ID FROM API:", data.vendorId);
     await setTokens({
   token: data.token,
   refreshToken: data.refreshToken,
@@ -83,8 +85,8 @@ const userData = {
   role: data.role,
   vendorId: data.vendorId,
 };
+console.log("💾 USER DATA TO STORE:", userData);
 
-await AsyncStorage.setItem("user", JSON.stringify(userData));
 login(userData);
 
     if (data.role === "CUS") {

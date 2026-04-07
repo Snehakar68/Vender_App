@@ -1,11 +1,13 @@
 import { clearTokens, getAccessToken } from "./tokenStorage";
 import { router } from "expo-router";
-import axios, { AxiosError } from "axios";
+import axios from "axios";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export const logout = async (setUser?: (val: any) => void) => {
   try {
     const token = await getAccessToken();
-    
+    const storedUser = await AsyncStorage.getItem("user");
+    const vendorId = storedUser ? JSON.parse(storedUser).vendorId : null;
 
     if (token) {
       await axios.post(
@@ -14,6 +16,7 @@ export const logout = async (setUser?: (val: any) => void) => {
         {
           headers: {
             Authorization: `Bearer ${token}`,
+            "x-vendor-id": vendorId, // 👈 vendor-aware logout
           },
         }
       );
@@ -26,7 +29,9 @@ export const logout = async (setUser?: (val: any) => void) => {
     }
   }
 
+  // 🔥 Clear everything
   await clearTokens();
+  await AsyncStorage.removeItem("user");
 
   if (setUser) {
     setUser(null);
