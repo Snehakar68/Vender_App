@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Colors } from '@/constants/theme';
+import { Colors } from '@/src/shared/constants/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function HospitalLayout() {

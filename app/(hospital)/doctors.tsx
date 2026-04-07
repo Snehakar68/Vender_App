@@ -3,12 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  FlatList, 
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Colors, Radius, Spacing, Shadow, FontFamily, FontSize } from '@/constants/theme';
+import { Colors, Spacing, Radius, Shadow, FontFamily, FontSize } from '@/src/shared/constants/theme';
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 

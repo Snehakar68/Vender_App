@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
-import { Colors, FontFamily, FontSize, Spacing, Radius, Shadow, ButtonSize } from '@/constants/theme';
+import { Colors, FontFamily, FontSize, Spacing, Radius, Shadow, ButtonSize } from '@/src/shared/constants/theme';
 import { DEPARTMENTS, Department } from '@/src/features/services/constants/departments';
 import { loadSelectedServices, saveSelectedServices } from '@/src/features/services/services/storage';
 

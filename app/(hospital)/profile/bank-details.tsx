@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
-import { Colors, FontFamily, FontSize, Spacing, Radius, Shadow, ButtonSize } from '@/constants/theme';
+import { Colors, FontFamily, FontSize, Spacing, Radius, Shadow, ButtonSize } from '@/src/shared/constants/theme';
 
 const ACCOUNT_TYPES = ['Savings Account', 'Current Account', 'Salary Account'];
 

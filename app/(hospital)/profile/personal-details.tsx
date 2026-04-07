@@ -21,7 +21,7 @@ import {
   Radius,
   Shadow,
   ButtonSize,
-} from "@/constants/theme";
+} from "@/src/shared/constants/theme";
 
 export default function PersonalDetailsScreen() {
   const router = useRouter();

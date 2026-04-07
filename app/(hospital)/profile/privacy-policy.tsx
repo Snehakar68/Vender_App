@@ -9,7 +9,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
-import { Colors, FontFamily, FontSize, Spacing, Radius } from '@/constants/theme';
+import { Colors, FontFamily, FontSize, Spacing, Radius } from '@/src/shared/constants/theme';
 
 const SECTIONS = [
   {

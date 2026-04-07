@@ -10,7 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Colors, FontFamily, FontSize, Spacing, Radius, Shadow, ButtonSize } from '@/constants/theme';
+import { Colors, FontFamily, FontSize, Spacing, Radius, Shadow, ButtonSize } from '@/src/shared/constants/theme';
 import { SERVICES_KEY } from '@/src/features/services/services/storage';
 
 const AUTH_KEY = '@jhilmil/auth_token';
