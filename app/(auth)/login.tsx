@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import { router } from "expo-router";
 
 export default function Login() {
   return (
@@ -46,7 +47,7 @@ export default function Login() {
         />
 
         {/* Login Button */}
-        <TouchableOpacity style={styles.loginBtn}>
+        <TouchableOpacity style={styles.loginBtn} onPress={() => router.replace('/(hospital)/home' as any)}>
           <Text style={styles.loginText}>Login →</Text>
         </TouchableOpacity>
 

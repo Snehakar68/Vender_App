@@ -1,22 +1,31 @@
 import { View, Text, StyleSheet, Image } from "react-native";
 import { useEffect } from "react";
 import { router } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const AUTH_KEY = "@jhilmil/auth_token";
 
 export default function Splash() {
   useEffect(() => {
-    setTimeout(() => {
-      router.replace("/(auth)/login"); // redirect after splash
+    const timer = setTimeout(async () => {
+      const token = await AsyncStorage.getItem(AUTH_KEY);
+      if (token) {
+        router.replace("/(hospital)/home");
+      } else {
+        router.replace("/(auth)/login");
+      }
     }, 2500);
+    return () => clearTimeout(timer);
   }, []);
 
   return (
     <View style={styles.container}>
       {/* Logo Circle */}
       <View style={styles.logoContainer}>
-  <Image 
-  source={require("../src/assets/images/logo.png")} 
-  style={{ width: 50, height: 50, resizeMode: "contain" }} 
-/>
+        <Image
+          source={require("../src/assets/images/logo.png")}
+          style={{ width: 50, height: 50, resizeMode: "contain" }}
+        />
       </View>
 
       {/* App Name */}
