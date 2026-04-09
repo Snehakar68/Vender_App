@@ -59,8 +59,6 @@ export default function RegisterProfile() {
   const [successMsg, setSuccessMsg] = useState("");
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-
-
   const set = (key: string, value: string) => {
     setForm((p) => ({ ...p, [key]: value }));
     setErrors((p: any) => ({ ...p, [key]: "" }));
@@ -174,6 +172,25 @@ export default function RegisterProfile() {
         throw new Error(data.message || "Failed");
       }
       if (res.ok) {
+        const userData = {
+          fullName: form.fullname,
+          gender: form.gender,
+          dob: form.dob,
+          bloodGroup: form.bloodGroup,
+          altPhone: form.altPhone,
+          address1: form.address1,
+          address2: form.address2,
+          city: form.city,
+          state: form.state,
+          pin: form.pin,
+          latitude: form.latitude,
+          longitude: form.longitude,
+          email,
+          mobile: phone,
+        };
+        console.log("USER DATA TO STORE:", userData);
+        await AsyncStorage.setItem("userProfile", JSON.stringify(userData));
+
         setSuccessMsg(data.message || "Registration successful");
 
         setTimeout(() => {
@@ -190,15 +207,10 @@ export default function RegisterProfile() {
   if (successMsg) {
     return (
       <View style={styles.successWrapper}>
-
         <View style={{ flex: 1, justifyContent: "center" }}>
           <View style={styles.successBox}>
-            <Text style={styles.successText}>
-              🎉 {successMsg}
-            </Text>
-            <Text style={styles.successSubText}>
-              Redirecting to login...
-            </Text>
+            <Text style={styles.successText}>🎉 {successMsg}</Text>
+            <Text style={styles.successSubText}>Redirecting to login...</Text>
           </View>
         </View>
 
@@ -213,7 +225,6 @@ export default function RegisterProfile() {
             </Text>
           </Text>
         </View>
-
       </View>
     );
   }
@@ -237,12 +248,10 @@ export default function RegisterProfile() {
             }}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
-            bounces={false}                 // ✅ REMOVE bounce
-            overScrollMode="never"          // ✅ ANDROID FIX
+            bounces={false} // ✅ REMOVE bounce
+            overScrollMode="never" // ✅ ANDROID FIX
           >
-
             {/* HEADER */}
-
 
             {/* FULL NAME */}
             <Text style={styles.label}>
@@ -250,11 +259,14 @@ export default function RegisterProfile() {
               <Text style={styles.star}>*</Text>
             </Text>
             <TextInput
-              placeholder={isHospital ? "Enter hospital name" : "Enter your full name"}
+              placeholder={
+                isHospital ? "Enter hospital name" : "Enter your full name"
+              }
               style={styles.input}
               value={form.fullname}
               onChangeText={(v) => set("fullname", v)}
-            />{errors.fullname && (
+            />
+            {errors.fullname && (
               <Text style={styles.errorText}>{errors.fullname}</Text>
             )}
 
@@ -262,38 +274,39 @@ export default function RegisterProfile() {
               <>
                 {/* ROW (GENDER + BLOOD GROUP) */}
                 <View style={styles.row}>
-
                   <View style={styles.half}>
-                    <Text style={styles.label}>Gender <Text style={styles.star}>*</Text></Text>
+                    <Text style={styles.label}>
+                      Gender <Text style={styles.star}>*</Text>
+                    </Text>
                     <View style={styles.pickerContainer}>
                       <Picker
                         selectedValue={form.gender}
                         onValueChange={(value) => set("gender", value)}
-                        style={{ height: 50, color: "#111" }}   // 🔥 IMPORTANT
-                        dropdownIconColor="#111"                // 🔥 Android fix
-                        mode="dropdown"                         // 🔥 Android fix
+                        style={{ height: 50, color: "#111" }} // 🔥 IMPORTANT
+                        dropdownIconColor="#111" // 🔥 Android fix
+                        mode="dropdown" // 🔥 Android fix
                       >
                         <Picker.Item label="Select" value="" color="#9CA3AF" />
                         <Picker.Item label="Male" value="M" />
                         <Picker.Item label="Female" value="F" />
                         <Picker.Item label="Other" value="O" />
                       </Picker>
-
                     </View>
                     {errors.gender && (
                       <Text style={styles.errorText}>{errors.gender}</Text>
                     )}
                   </View>
 
-
                   <View style={styles.half}>
-                    <Text style={styles.label}>Blood Group <Text style={styles.star}>*</Text></Text>
+                    <Text style={styles.label}>
+                      Blood Group <Text style={styles.star}>*</Text>
+                    </Text>
                     <View style={styles.pickerContainer}>
                       <Picker
                         selectedValue={form.bloodGroup}
                         onValueChange={(value) => set("bloodGroup", value)}
-                        style={{ height: 50, color: "#111" }}   // 🔥 IMPORTANT
-                        dropdownIconColor="#111"                // 🔥 Android fix
+                        style={{ height: 50, color: "#111" }} // 🔥 IMPORTANT
+                        dropdownIconColor="#111" // 🔥 Android fix
                         mode="dropdown"
                       >
                         <Picker.Item label="Select" value="" />
@@ -302,18 +315,17 @@ export default function RegisterProfile() {
                         <Picker.Item label="O+" value="O+" />
                         <Picker.Item label="AB+" value="AB+" />
                       </Picker>
-
                     </View>
                     {errors.bloodGroup && (
                       <Text style={styles.errorText}>{errors.bloodGroup}</Text>
                     )}
                   </View>
-
-
                 </View>
 
                 {/* DOB */}
-                <Text style={styles.label}>Date of Birth <Text style={styles.star}>*</Text></Text>
+                <Text style={styles.label}>
+                  Date of Birth <Text style={styles.star}>*</Text>
+                </Text>
                 <TouchableOpacity
                   style={[styles.input, { justifyContent: "center" }]}
                   onPress={() => setShowDatePicker(true)}
@@ -326,21 +338,25 @@ export default function RegisterProfile() {
                   >
                     {form.dob || "mm/dd/yyyy"}
                   </Text>
-
                 </TouchableOpacity>
                 {errors.dob && (
                   <Text style={styles.errorText}>{errors.dob}</Text>
                 )}
 
-                <Modal visible={showDatePicker} transparent animationType="slide">
+                <Modal
+                  visible={showDatePicker}
+                  transparent
+                  animationType="slide"
+                >
                   <TouchableOpacity
                     // style={styles.modalOverlay}
                     // activeOpacity={1}
                     onPress={() => setShowDatePicker(false)}
                   >
-                    <TouchableOpacity activeOpacity={1} style={styles.dateModalContainer}>
-
-
+                    <TouchableOpacity
+                      activeOpacity={1}
+                      style={styles.dateModalContainer}
+                    >
                       <DateTimePicker
                         value={form.dob ? new Date(form.dob) : new Date()}
                         mode="date"
@@ -348,7 +364,9 @@ export default function RegisterProfile() {
                         maximumDate={new Date()}
                         onChange={(event, selectedDate) => {
                           if (event.type === "set" && selectedDate) {
-                            const formatted = selectedDate.toISOString().split("T")[0];
+                            const formatted = selectedDate
+                              .toISOString()
+                              .split("T")[0];
                             set("dob", formatted);
                             setShowDatePicker(false);
                           } else {
@@ -356,7 +374,6 @@ export default function RegisterProfile() {
                           }
                         }}
                       />
-
                     </TouchableOpacity>
                   </TouchableOpacity>
                 </Modal>
@@ -378,7 +395,9 @@ export default function RegisterProfile() {
             />
 
             {/* ADDRESS */}
-            <Text style={styles.label}>Address Line 1 <Text style={styles.star}>*</Text></Text>
+            <Text style={styles.label}>
+              Address Line 1 <Text style={styles.star}>*</Text>
+            </Text>
             <TextInput
               placeholder="House no, Street name"
               style={styles.input}
@@ -475,10 +494,7 @@ export default function RegisterProfile() {
               onPress={handleSubmit}
               disabled={loading}
               activeOpacity={0.7}
-              style={[
-                styles.button,
-                loading && styles.buttonDisabled
-              ]}
+              style={[styles.button, loading && styles.buttonDisabled]}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
@@ -497,7 +513,6 @@ export default function RegisterProfile() {
                 Login
               </Text>
             </Text>
-
           </ScrollView>
         </View>
       </TouchableWithoutFeedback>
@@ -508,7 +523,7 @@ export default function RegisterProfile() {
 const styles = StyleSheet.create({
   container: {
     padding: 20,
-    paddingTop: 20,   // 🔥 pushes content down properly
+    paddingTop: 20, // 🔥 pushes content down properly
     backgroundColor: "#F8FAFC",
   },
 
@@ -615,7 +630,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 8,
     width: "100%",
-    shadowColor: "#000",   // 🔥 add depth
+    shadowColor: "#000", // 🔥 add depth
     shadowOpacity: 0.1,
     shadowRadius: 6,
     elevation: 3,
@@ -640,7 +655,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F1F5F9",
     borderRadius: 10,
     justifyContent: "center",
-    height: 50,   // 🔥 REQUIRED
+    height: 50, // 🔥 REQUIRED
     overflow: "hidden",
   },
   star: {
@@ -682,6 +697,4 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.4)",
     justifyContent: "flex-end",
   },
-
-
 });

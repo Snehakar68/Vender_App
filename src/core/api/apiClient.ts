@@ -5,9 +5,10 @@ import {
   getAccessToken,
   getRefreshToken,
   setTokens,
-  clearTokens,
+  clearTokens, 
 } from "@/src/utils/tokenStorage";
 import { router } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
  
 const api = axios.create({
   baseURL:
@@ -28,9 +29,15 @@ const onRefreshed = (token: string) => {
 // ✅ REQUEST INTERCEPTOR (already correct)
 api.interceptors.request.use(async (config) => {
   const token = await getAccessToken();
+  const storedUser = await AsyncStorage.getItem("user");
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  if (storedUser) {
+    const { vendorId } = JSON.parse(storedUser);
+    config.headers["x-vendor-id"] = vendorId;
   }
 
   return config;
@@ -75,6 +82,20 @@ api.interceptors.response.use(
   token: newToken,
   refreshToken: newRefreshToken || refreshToken,
 });
+const storedUser = await AsyncStorage.getItem("user");
+
+if (storedUser) {
+  const parsed = JSON.parse(storedUser);
+
+  await AsyncStorage.setItem(
+    "user",
+    JSON.stringify({
+      ...parsed,
+      token: newToken,
+      refreshToken: newRefreshToken || refreshToken,
+    })
+  );
+}
     onRefreshed(newToken);
 
     originalRequest.headers.Authorization = `Bearer ${newToken}`;

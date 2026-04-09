@@ -1,35 +1,46 @@
-import React from 'react';
+import React from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Colors, FontFamily, FontSize, Spacing, Radius, Shadow, ButtonSize } from '@/src/shared/constants/theme';
-import { SERVICES_KEY } from '@/src/features/services/services/storage';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  Colors,
+  FontFamily,
+  FontSize,
+  Spacing,
+  Radius,
+  Shadow,
+  ButtonSize,
+} from "@/src/shared/constants/theme";
+import { SERVICES_KEY } from "@/src/features/services/services/storage";
+import { useContext } from "react";
+import { AuthContext } from "@/src/core/context/AuthContext";
 
-const AUTH_KEY = '@jhilmil/auth_token';
+const AUTH_KEY = "@jhilmil/auth_token";
 
 export default function ProfileScreen() {
   const router = useRouter();
-
+  const auth = useContext(AuthContext);
   async function handleSignOut() {
-    await AsyncStorage.multiRemove([SERVICES_KEY, AUTH_KEY]);
-    router.replace('/(auth)/login');
+    // await AsyncStorage.multiRemove([SERVICES_KEY, AUTH_KEY]);
+    // router.replace("/(auth)/login");
+     await auth?.logout();
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
-
+        showsVerticalScrollIndicator={false}
+      >
         {/* Profile header card */}
         <View style={styles.headerCard}>
           {/* Avatar */}
@@ -47,10 +58,15 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             style={styles.detailsBtn}
-            onPress={() => router.push('/profile/personal-details')}
-            activeOpacity={0.75}>
+            onPress={() => router.push("/profile/personal-details")}
+            activeOpacity={0.75}
+          >
             <Text style={styles.detailsBtnText}>View personal details</Text>
-            <MaterialIcons name="chevron-right" size={18} color={Colors.light.primary} />
+            <MaterialIcons
+              name="chevron-right"
+              size={18}
+              color={Colors.light.primary}
+            />
           </TouchableOpacity>
         </View>
 
@@ -58,26 +74,44 @@ export default function ProfileScreen() {
         <View style={styles.menuCard}>
           <TouchableOpacity
             style={styles.menuRow}
-            onPress={() => router.push('/profile/bank-details')}
-            activeOpacity={0.7}>
+            onPress={() => router.push("/profile/bank-details")}
+            activeOpacity={0.7}
+          >
             <View style={styles.menuIconWrap}>
-              <MaterialIcons name="account-balance" size={20} color={Colors.light.onSurfaceVariant} />
+              <MaterialIcons
+                name="account-balance"
+                size={20}
+                color={Colors.light.onSurfaceVariant}
+              />
             </View>
             <Text style={styles.menuLabel}>Bank Details</Text>
-            <MaterialIcons name="chevron-right" size={22} color={Colors.light.outline} />
+            <MaterialIcons
+              name="chevron-right"
+              size={22}
+              color={Colors.light.outline}
+            />
           </TouchableOpacity>
 
           <View style={styles.menuDivider} />
 
           <TouchableOpacity
             style={styles.menuRow}
-            onPress={() => router.push('/profile/privacy-policy')}
-            activeOpacity={0.7}>
+            onPress={() => router.push("/profile/privacy-policy")}
+            activeOpacity={0.7}
+          >
             <View style={styles.menuIconWrap}>
-              <MaterialIcons name="policy" size={20} color={Colors.light.onSurfaceVariant} />
+              <MaterialIcons
+                name="policy"
+                size={20}
+                color={Colors.light.onSurfaceVariant}
+              />
             </View>
             <Text style={styles.menuLabel}>Privacy Policy</Text>
-            <MaterialIcons name="chevron-right" size={22} color={Colors.light.outline} />
+            <MaterialIcons
+              name="chevron-right"
+              size={22}
+              color={Colors.light.outline}
+            />
           </TouchableOpacity>
         </View>
 
@@ -85,7 +119,8 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={styles.signOutBtn}
           onPress={handleSignOut}
-          activeOpacity={0.8}>
+          activeOpacity={0.8}
+        >
           <MaterialIcons name="logout" size={20} color={Colors.light.error} />
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
@@ -115,11 +150,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.surfaceContainerLowest,
     borderRadius: Radius.xl,
     padding: Spacing.lg,
-    alignItems: 'center',
+    alignItems: "center",
     ...Shadow.card,
   },
   avatarWrap: {
-    position: 'relative',
+    position: "relative",
     marginBottom: Spacing.md,
   },
   avatar: {
@@ -129,8 +164,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.primaryFixed,
     borderWidth: 2.5,
     borderColor: Colors.light.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarInitials: {
     fontFamily: FontFamily.headline,
@@ -138,15 +173,15 @@ const styles = StyleSheet.create({
     color: Colors.light.primary,
   },
   avatarEditBtn: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     right: 0,
     width: 26,
     height: 26,
     borderRadius: Radius.full,
     backgroundColor: Colors.light.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 2,
     borderColor: Colors.light.surfaceContainerLowest,
   },
@@ -155,18 +190,18 @@ const styles = StyleSheet.create({
     fontSize: FontSize.headlineSmall,
     color: Colors.light.onSurface,
     marginBottom: 4,
-    textAlign: 'center',
+    textAlign: "center",
   },
   designation: {
     fontFamily: FontFamily.body,
     fontSize: FontSize.bodyMedium,
     color: Colors.light.onSurfaceVariant,
     marginBottom: Spacing.md,
-    textAlign: 'center',
+    textAlign: "center",
   },
   detailsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 2,
     backgroundColor: Colors.light.surface,
     borderRadius: Radius.xl,
@@ -183,12 +218,12 @@ const styles = StyleSheet.create({
   menuCard: {
     backgroundColor: Colors.light.surfaceContainerLowest,
     borderRadius: Radius.xl,
-    overflow: 'hidden',
+    overflow: "hidden",
     ...Shadow.card,
   },
   menuRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     gap: Spacing.md,
@@ -198,8 +233,8 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: Radius.lg,
     backgroundColor: Colors.light.surfaceContainerLow,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   menuLabel: {
     flex: 1,
@@ -215,9 +250,9 @@ const styles = StyleSheet.create({
 
   // Sign Out
   signOutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: Spacing.sm,
     backgroundColor: Colors.light.errorContainer,
     borderRadius: Radius.xl,
@@ -234,7 +269,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.body,
     fontSize: FontSize.labelSmall,
     color: Colors.light.onSurfaceVariant,
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: Spacing.xs,
   },
 });
