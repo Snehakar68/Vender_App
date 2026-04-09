@@ -1,33 +1,238 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
+import api from '@/src/core/api/apiClient';
 import { Colors, Radius, Spacing, Shadow, FontFamily, FontSize } from '@/src/shared/constants/theme';
 
-// ── Static data ───────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-const SERVICES = [
-  { id: 'ambulance', label: 'Ambulance', icon: 'emergency',          bg: Colors.light.error },
-  { id: 'doctor',    label: 'Doctor',    icon: 'person-search',      bg: Colors.light.primary },
-  { id: 'nurse',     label: 'Nurse',     icon: 'local-hospital',     bg: '#1565C0' },
-  { id: 'cleaner',   label: 'Cleaner',   icon: 'cleaning-services',  bg: '#E65100' },
+type Counts = {
+  doctor: number;
+  nurse: number;
+  cleaner: number;
+  ambulance: number;
+  emergency: number;
+};
+
+type PendingDoctor = {
+  doctor_id: string;
+  full_Name?: string;
+  full_name?: string;
+  city?: string;
+  state?: string;
+};
+
+type PendingNurse = {
+  nurse_id: string;
+  nurse_detail: {
+    full_name?: string;
+    city?: string;
+    state?: string;
+  };
+};
+
+// ── Stat card config ───────────────────────────────────────────────────────────
+
+const STAT_CARDS = [
+  { key: 'doctor',    label: 'Total Doctors',      icon: 'person-search',     color: '#3b82f6' },
+  { key: 'nurse',     label: 'Total Nurses',        icon: 'local-hospital',    color: '#22c55e' },
+  { key: 'cleaner',   label: 'Total Cleaners',      icon: 'cleaning-services', color: '#f97316' },
+  { key: 'ambulance', label: 'Active Ambulances',   icon: 'emergency',         color: Colors.light.tertiary },
+  { key: 'emergency', label: 'Emergency',           icon: 'crisis-alert',      color: '#6366f1' },
 ] as const;
 
-const TASKS = [
-  { id: '1', patient: 'Rajesh Kumar',  task: 'Post-op Checkup',    time: '10:30 AM', initials: 'RK' },
-  { id: '2', patient: 'Priya Sharma',  task: 'Wound Dressing',     time: '11:00 AM', initials: 'PS' },
-  { id: '3', patient: 'Mohan Das',     task: 'Medication Review',  time: '12:15 PM', initials: 'MD' },
-];
+// ── Bar chart config ───────────────────────────────────────────────────────────
+
+const BAR_CONFIG = [
+  { key: 'doctor',    label: 'Docs',   color: '#3b82f6' },
+  { key: 'nurse',     label: 'Nurses', color: '#22c55e' },
+  { key: 'cleaner',   label: 'Clean',  color: '#f97316' },
+  { key: 'ambulance', label: 'Amb',    color: '#38bdf8' },
+] as const;
+
+const BAR_MAX_HEIGHT = 80;
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function HospitalHome() {
+  const [vendorId, setVendorId] = useState<string | null>(null);
+  const [counts, setCounts] = useState<Counts>({ doctor: 0, nurse: 0, cleaner: 0, ambulance: 0, emergency: 0 });
+  const [pendingDoctors, setPendingDoctors] = useState<PendingDoctor[]>([]);
+  const [pendingNurses, setPendingNurses] = useState<PendingNurse[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // ── Load vendorId on mount ──────────────────────────────────────────────────
+
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const raw = await AsyncStorage.getItem('user');
+        const userData = JSON.parse(raw || '{}');
+        setVendorId(userData.vendorId ?? null);
+      } catch (e) {
+        console.error('Failed to load vendorId', e);
+      }
+    };
+    init();
+  }, []);
+
+  // ── Fetch helpers ───────────────────────────────────────────────────────────
+
+const loadCounts = useCallback(async (vid: string) => {
+  try {
+    const res = await api.get(
+      `/api/Hospital/Total_count_for_Hospital?Hosp_ID=${vid}`
+    );
+
+    const result = res.data;
+
+    if (result?.status === true) {
+      const countsData = result.data || {};
+
+      setCounts({
+        doctor: countsData.doctor ?? 0,
+        nurse: countsData.nurse ?? 0,
+        cleaner: countsData.cleaner ?? 0,
+        ambulance: countsData.ambulance ?? 0,
+        emergency: 0,
+      });
+    }
+  } catch (e) {
+    console.error('loadCounts error', e);
+  }
+}, []);
+
+  const loadPendingDoctors = useCallback(async (vid: string) => {
+    try {
+      const res = await api.get(
+        `/api/Hospital/Total_pending_Doctor_Hosp?Hosp_ID=${vid}`
+      );
+      console.log('Pending doctors response:', res.data);
+      const result = res.data;
+      console.log('Pending doctors result:', result);
+      setPendingDoctors(result?.data ?? result ?? []);
+    } catch (e) {
+      console.error('loadPendingDoctors error', e);
+    }
+  }, []);
+
+  const loadPendingNurses = useCallback(async (vid: string) => {
+    try {
+      const res = await api.get(
+        `/api/Hospital/Total_pending_Nurse_Hosp?Hosp_ID=${vid}`
+      );
+      console.log('Pending nurses response:', res.data);
+      const result = res.data;
+      console.log('Pending nurses result:', result);
+      setPendingNurses(result?.data ?? result ?? []);
+    } catch (e) {
+      console.error('loadPendingNurses error', e);
+    }
+  }, []);
+
+  // ── Load all data when vendorId is ready ───────────────────────────────────
+
+  useEffect(() => {
+    if (!vendorId) return;
+    const fetchAll = async () => {
+      setLoading(true);
+      await Promise.all([
+        loadCounts(vendorId),
+        loadPendingDoctors(vendorId),
+        loadPendingNurses(vendorId),
+      ]);
+      setLoading(false);
+    };
+    fetchAll();
+  }, [vendorId, loadCounts, loadPendingDoctors, loadPendingNurses]);
+
+  // ── Approve handlers ────────────────────────────────────────────────────────
+
+  const approveDoctor = async (doctorId: string) => {
+    if (!vendorId) return;
+    try {
+      const res = await api.get(
+        `/api/Hospital/Approve_Hospital_Doctor/${vendorId}/${doctorId}`
+      );
+      console.log('Approve doctor response:', res.data);
+      const result = res.data;
+      console.log('Approve doctor result:', result);
+      if (result?.status === true || res.status === 200) {
+        setPendingDoctors(prev => prev.filter(d => d.doctor_id !== doctorId));
+        loadCounts(vendorId);
+      } else {
+        Alert.alert('Error', result?.message ?? 'Could not approve doctor.');
+      }
+    } catch (e: any) {
+      const text = e?.response?.data;
+      let msg = 'Could not approve doctor.';
+      if (typeof text === 'string') {
+        try { msg = JSON.parse(text)?.message ?? msg; } catch { msg = text || msg; }
+      } else if (text?.message) {
+        msg = text.message;
+      }
+      console.error('approveDoctor error', e);
+      Alert.alert('Error', msg);
+    }
+  };
+
+  const approveNurse = async (nurseId: string) => {
+    if (!vendorId) return;
+    try {
+      const res = await api.get(
+        `/api/Hospital/Approve_Hospital_Nurse/${vendorId}/${nurseId}`
+      );
+      const result = res.data;
+      console.log('Approve nurse response:', result);
+      if (result?.status === true || res.status === 200) {
+        setPendingNurses(prev => prev.filter(n => n.nurse_id !== nurseId));
+        loadCounts(vendorId);
+      } else {
+        Alert.alert('Error', result?.message ?? 'Could not approve nurse.');
+      }
+    } catch (e: any) {
+      const text = e?.response?.data;
+      let msg = 'Could not approve nurse.';
+      if (typeof text === 'string') {
+        try { msg = JSON.parse(text)?.message ?? msg; } catch { msg = text || msg; }
+      } else if (text?.message) {
+        msg = text.message;
+      }
+      console.error('approveNurse error', e);
+      Alert.alert('Error', msg);
+    }
+  };
+
+  // ── Bar chart calculation ───────────────────────────────────────────────────
+
+  const barValues = BAR_CONFIG.map(b => counts[b.key as keyof Counts]);
+  const maxVal = Math.max(...barValues, 1);
+
+  // ── Loading ─────────────────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={Colors.light.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
@@ -50,7 +255,6 @@ export default function HospitalHome() {
 
         {/* ── Welcome Card ── */}
         <View style={styles.welcomeCard}>
-          {/* Decorative circle */}
           <View style={styles.welcomeDecor} />
           <View style={styles.welcomeContent}>
             <Text style={styles.welcomeGreeting}>Welcome back,</Text>
@@ -63,46 +267,161 @@ export default function HospitalHome() {
           <Text style={styles.welcomeSub}>Your dashboard is up to date</Text>
         </View>
 
-        {/* ── Quick Services Grid ── */}
-        <Text style={styles.sectionLabel}>Quick Services</Text>
-        <View style={styles.servicesGrid}>
-          {SERVICES.map((s) => (
-            <TouchableOpacity key={s.id} style={[styles.serviceCard, { backgroundColor: s.bg }]} activeOpacity={0.85}>
-              <MaterialIcons name={s.icon as any} size={28} color="#fff" />
-              <Text style={styles.serviceLabel}>{s.label}</Text>
-            </TouchableOpacity>
+        {/* ── Stat Cards ── */}
+        <Text style={styles.sectionLabel}>Overview</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.statRow}>
+          {STAT_CARDS.map(card => (
+            <View key={card.key} style={[styles.statCard, { backgroundColor: card.color }]}>
+              <MaterialIcons name={card.icon as any} size={24} color="#fff" />
+              <Text style={styles.statCount}>{counts[card.key as keyof Counts]}</Text>
+              <Text style={styles.statLabel}>{card.label}</Text>
+            </View>
           ))}
-        </View>
+        </ScrollView>
 
-        {/* ── Upcoming Tasks ── */}
-        <View style={styles.sectionRow}>
-          <Text style={styles.sectionLabel}>Upcoming Tasks</Text>
-          <TouchableOpacity>
-            <Text style={styles.seeAll}>See all</Text>
-          </TouchableOpacity>
-        </View>
-
-        {TASKS.map((t) => (
-          <View key={t.id} style={styles.taskCard}>
-            <View style={styles.taskAvatar}>
-              <Text style={styles.taskAvatarText}>{t.initials}</Text>
-            </View>
-            <View style={styles.taskInfo}>
-              <Text style={styles.taskPatient}>{t.patient}</Text>
-              <Text style={styles.taskType}>{t.task}</Text>
-            </View>
-            <View style={styles.timeBadge}>
-              <Text style={styles.timeBadgeText}>{t.time}</Text>
-            </View>
+        {/* ── Pending Doctors ── */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Pending Doctor Approvals</Text>
+            <TouchableOpacity onPress={() => router.push('/(hospital)/doctors')}>
+              <Text style={styles.viewAll}>View All</Text>
+            </TouchableOpacity>
           </View>
-        ))}
 
-        {/* ── Health Tip ── */}
-        <View style={styles.tipCard}>
-          <MaterialIcons name="tips-and-updates" size={20} color={Colors.light.tertiary} />
-          <Text style={styles.tipText}>
-            Ensure all staff complete daily handover notes before shift change.
-          </Text>
+          {/* Column headers */}
+          <View style={styles.tableHeader}>
+            <Text style={[styles.col, styles.colName, styles.colHead]}>Name</Text>
+            <Text style={[styles.col, styles.colCity, styles.colHead]}>City</Text>
+            <Text style={[styles.col, styles.colState, styles.colHead]}>State</Text>
+            <Text style={[styles.col, styles.colActions, styles.colHead]}>Actions</Text>
+          </View>
+
+          {pendingDoctors.length === 0 ? (
+            <Text style={styles.emptyText}>No pending doctors</Text>
+          ) : (
+            <ScrollView nestedScrollEnabled style={styles.tableScroll}>
+              {pendingDoctors.map(doc => (
+                <View key={doc.doctor_id} style={styles.tableRow}>
+                  <Text style={[styles.col, styles.colName]} numberOfLines={1}>
+                    {doc.full_Name ?? doc.full_name ?? '—'}
+                  </Text>
+                  <Text style={[styles.col, styles.colCity]} numberOfLines={1}>
+                    {doc.city ?? '—'}
+                  </Text>
+                  <Text style={[styles.col, styles.colState]} numberOfLines={1}>
+                    {doc.state ?? '—'}
+                  </Text>
+                  <View style={[styles.colActions, styles.actionRow]}>
+                    {/* View */}
+                    <TouchableOpacity
+                      style={styles.iconBtn}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/(hospital)/doctor-details/[id]',
+                          params: { id: doc.doctor_id },
+                        })
+                      }>
+                      <MaterialIcons name="visibility" size={16} color={Colors.light.primary} />
+                    </TouchableOpacity>
+                    {/* Edit — TODO: add edit route */}
+                    <TouchableOpacity style={styles.iconBtn}>
+                      <MaterialIcons name="edit" size={16} color={Colors.light.onSurfaceVariant} />
+                    </TouchableOpacity>
+                    {/* Approve */}
+                    <TouchableOpacity
+                      style={[styles.iconBtn, styles.approveBtn]}
+                      onPress={() => approveDoctor(doc.doctor_id)}>
+                      <MaterialIcons name="check" size={16} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+
+        {/* ── Pending Nurses ── */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Pending Nurse Approvals</Text>
+            <TouchableOpacity onPress={() => router.push('/(hospital)/nurses')}>
+              <Text style={styles.viewAll}>View All</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Column headers */}
+          <View style={styles.tableHeader}>
+            <Text style={[styles.col, styles.colName, styles.colHead]}>Name</Text>
+            <Text style={[styles.col, styles.colCity, styles.colHead]}>City</Text>
+            <Text style={[styles.col, styles.colState, styles.colHead]}>State</Text>
+            <Text style={[styles.col, styles.colActions, styles.colHead]}>Actions</Text>
+          </View>
+
+          {pendingNurses.length === 0 ? (
+            <Text style={styles.emptyText}>No pending nurses</Text>
+          ) : (
+            <ScrollView nestedScrollEnabled style={styles.tableScroll}>
+              {pendingNurses.map(nurse => (
+                <View key={nurse.nurse_id} style={styles.tableRow}>
+                  <Text style={[styles.col, styles.colName]} numberOfLines={1}>
+                    {nurse.nurse_detail?.full_name ?? '—'}
+                  </Text>
+                  <Text style={[styles.col, styles.colCity]} numberOfLines={1}>
+                    {nurse.nurse_detail?.city ?? '—'}
+                  </Text>
+                  <Text style={[styles.col, styles.colState]} numberOfLines={1}>
+                    {nurse.nurse_detail?.state ?? '—'}
+                  </Text>
+                  <View style={[styles.colActions, styles.actionRow]}>
+                    {/* View */}
+                    <TouchableOpacity
+                      style={styles.iconBtn}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/(hospital)/nurse-details/[id]',
+                          params: { id: nurse.nurse_id },
+                        })
+                      }>
+                      <MaterialIcons name="visibility" size={16} color={Colors.light.primary} />
+                    </TouchableOpacity>
+                    {/* Edit — TODO: add edit route */}
+                    <TouchableOpacity style={styles.iconBtn}>
+                      <MaterialIcons name="edit" size={16} color={Colors.light.onSurfaceVariant} />
+                    </TouchableOpacity>
+                    {/* Approve */}
+                    <TouchableOpacity
+                      style={[styles.iconBtn, styles.approveBtn]}
+                      onPress={() => approveNurse(nurse.nurse_id)}>
+                      <MaterialIcons name="check" size={16} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+
+        {/* ── Staff Bar Chart ── */}
+        <View style={styles.card}>
+          <Text style={styles.chartTitle}>Staff by Dept</Text>
+          <View style={styles.chartArea}>
+            {BAR_CONFIG.map((b, i) => {
+              const val = barValues[i];
+              const barH = Math.max(4, Math.round((val / maxVal) * BAR_MAX_HEIGHT));
+              return (
+                <View key={b.key} style={styles.barColumn}>
+                  <Text style={styles.barValue}>{val}</Text>
+                  <View style={styles.barTrack}>
+                    <View style={[styles.bar, { height: barH, backgroundColor: b.color }]} />
+                  </View>
+                  <Text style={styles.barLabel}>{b.label}</Text>
+                </View>
+              );
+            })}
+          </View>
         </View>
 
       </ScrollView>
@@ -124,6 +443,11 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     paddingBottom: Spacing.xl,
     gap: Spacing.md,
+  },
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // Header
@@ -224,108 +548,165 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.60)',
   },
 
-  // Section labels
+  // Section label
   sectionLabel: {
     fontFamily: FontFamily.headlineSemiBold,
     fontSize: FontSize.titleSmall,
     color: Colors.light.onSurface,
     marginBottom: -Spacing.xs,
   },
-  sectionRow: {
+
+  // Stat Cards
+  statRow: {
+    gap: Spacing.sm,
+    paddingBottom: 2,
+  },
+  statCard: {
+    width: 120,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    alignItems: 'center',
+    gap: 6,
+    ...Shadow.card,
+  },
+  statCount: {
+    fontFamily: FontFamily.headlineSemiBold,
+    fontSize: FontSize.headlineMedium,
+    color: '#fff',
+  },
+  statLabel: {
+    fontFamily: FontFamily.bodyMedium,
+    fontSize: FontSize.labelSmall,
+    color: 'rgba(255,255,255,0.85)',
+    textAlign: 'center',
+  },
+
+  // Card container
+  card: {
+    backgroundColor: Colors.light.surfaceContainerLowest,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    gap: Spacing.sm,
+    ...Shadow.card,
+  },
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: -Spacing.xs,
   },
-  seeAll: {
+  cardTitle: {
+    fontFamily: FontFamily.headlineSemiBold,
+    fontSize: FontSize.titleSmall,
+    color: Colors.light.onSurface,
+  },
+  viewAll: {
     fontFamily: FontFamily.bodyMedium,
     fontSize: FontSize.labelMedium,
     color: Colors.light.primary,
   },
 
-  // Services Grid
-  servicesGrid: {
+  // Table
+  tableHeader: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.outline + '40',
+    paddingBottom: Spacing.xs,
   },
-  serviceCard: {
-    width: '47.5%',
-    borderRadius: Radius.lg,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.sm,
+  tableScroll: {
+    maxHeight: 240,
+  },
+  tableRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    paddingVertical: Spacing.xs + 2,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.outline + '20',
   },
-  serviceLabel: {
+  col: {
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.bodySmall,
+    color: Colors.light.onSurface,
+  },
+  colHead: {
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: FontSize.labelLarge,
-    color: '#fff',
+    fontSize: FontSize.labelSmall,
+    color: Colors.light.onSurfaceVariant,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-
-  // Task Cards
-  taskCard: {
+  colName: {
+    flex: 2.5,
+  },
+  colCity: {
+    flex: 1.5,
+  },
+  colState: {
+    flex: 1.5,
+  },
+  colActions: {
+    flex: 2,
+  },
+  actionRow: {
     flexDirection: 'row',
+    gap: 4,
     alignItems: 'center',
-    backgroundColor: Colors.light.surfaceContainerLowest,
-    borderRadius: Radius.lg,
-    padding: Spacing.sm + 2,
-    gap: Spacing.sm,
-    ...Shadow.card,
   },
-  taskAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.light.primaryFixed,
+  iconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.light.surfaceContainerLow,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  taskAvatarText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: FontSize.labelLarge,
-    color: Colors.light.primary,
+  approveBtn: {
+    backgroundColor: '#22c55e',
   },
-  taskInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  taskPatient: {
-    fontFamily: FontFamily.headlineMedium,
-    fontSize: FontSize.bodyMedium,
-    color: Colors.light.onSurface,
-  },
-  taskType: {
+  emptyText: {
     fontFamily: FontFamily.body,
     fontSize: FontSize.bodySmall,
     color: Colors.light.onSurfaceVariant,
+    textAlign: 'center',
+    paddingVertical: Spacing.md,
   },
-  timeBadge: {
-    backgroundColor: Colors.light.surfaceContainerLow,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: Radius.md,
+
+  // Bar chart
+  chartTitle: {
+    fontFamily: FontFamily.bodyMedium,
+    fontSize: FontSize.labelSmall,
+    color: Colors.light.onSurfaceVariant,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
-  timeBadgeText: {
-    fontFamily: FontFamily.label,
+  chartArea: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-around',
+    height: BAR_MAX_HEIGHT + 36,
+    paddingTop: Spacing.sm,
+  },
+  barColumn: {
+    alignItems: 'center',
+    gap: 4,
+    flex: 1,
+  },
+  barValue: {
+    fontFamily: FontFamily.bodySemiBold,
     fontSize: FontSize.labelSmall,
     color: Colors.light.onSurfaceVariant,
   },
-
-  // Health Tip
-  tipCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: Colors.light.tertiaryFixed + '40',
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-    gap: Spacing.sm,
+  barTrack: {
+    width: 28,
+    height: BAR_MAX_HEIGHT,
+    justifyContent: 'flex-end',
   },
-  tipText: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: FontSize.bodySmall,
-    color: Colors.light.tertiary,
-    lineHeight: 20,
+  bar: {
+    width: 28,
+    borderRadius: 4,
+  },
+  barLabel: {
+    fontFamily: FontFamily.bodyMedium,
+    fontSize: FontSize.labelSmall,
+    color: Colors.light.onSurfaceVariant,
   },
 });

@@ -1,4 +1,111 @@
-import React, { useState, useEffect } from 'react';
+// import React, { useState, useEffect, useContext } from 'react';
+// import {
+//   View,
+//   Text,
+//   StyleSheet,
+//   FlatList,
+//   TouchableOpacity,
+//   ListRenderItemInfo,
+// } from 'react-native';
+// import { SafeAreaView } from 'react-native-safe-area-context';
+// import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+// import { useRouter } from 'expo-router';
+// import { Colors, FontFamily, FontSize, Spacing, Radius, Shadow, ButtonSize } from '@/src/shared/constants/theme';
+// import { DEPARTMENTS, Department } from '@/src/features/services/constants/departments';
+// import { loadSelectedServices, saveSelectedServices } from '@/src/features/services/services/storage';
+// import { AuthContext } from '@/src/core/context/AuthContext';
+
+// export default function SelectServicesScreen() {
+//     const router = useRouter();
+// const auth = useContext(AuthContext);
+// const vendorId = auth?.user?.vendorId;
+
+// const [selected, setSelected] = useState<Set<string>>(new Set());
+// const [departments, setDepartments] = useState<Department[]>([]);
+
+
+//   useEffect(() => {
+//     loadSelectedServices().then((ids) => {
+//       setSelected(new Set(ids));
+//     });
+//   }, []);
+
+//   function toggle(id: string) {
+//     setSelected((prev) => {
+//       const next = new Set(prev);
+//       next.has(id) ? next.delete(id) : next.add(id);
+//       return next;
+//     });
+//   }
+
+//   async function handleUpdate() {
+//     await saveSelectedServices([...selected]);
+//      router.replace('/(hospital)/services/your-services');
+//   }
+
+//   function renderItem({ item }: ListRenderItemInfo<Department>) {
+//     const isSelected = selected.has(item.id);
+//     return (
+//       <TouchableOpacity
+//         style={[styles.card, isSelected && styles.cardSelected]}
+//         onPress={() => toggle(item.id)}
+//         activeOpacity={0.75}>
+//         {/* Check indicator */}
+//         <View style={[styles.checkCircle, isSelected && styles.checkCircleSelected]}>
+//           {isSelected && <MaterialIcons name="check" size={14} color="#fff" />}
+//         </View>
+
+//         {/* Icon */}
+//         <View style={styles.iconWrap}>
+//           <MaterialIcons
+//             name={item.icon as any}
+//             size={22}
+//             color={isSelected ? Colors.light.primary : Colors.light.onSurfaceVariant}
+//           />
+//         </View>
+
+//         {/* Text */}
+//         <Text style={[styles.cardName, isSelected && styles.cardNameSelected]} numberOfLines={1}>
+//           {item.name}
+//         </Text>
+//         <Text style={styles.cardSpecialty} numberOfLines={1}>
+//           {item.specialty}
+//         </Text>
+//       </TouchableOpacity>
+//     );
+//   }
+
+//   return (
+//     <SafeAreaView style={styles.safeArea} edges={['top']}>
+//       {/* Header */}
+//       <View style={styles.header}>
+//         <Text style={styles.title}>Select Services</Text>
+//         <Text style={styles.subtitle}>
+//           Choose the departments you wish to subscribe to for homecare assistance.
+//         </Text>
+//       </View>
+
+//       <FlatList
+//         data={DEPARTMENTS}
+//         keyExtractor={(item) => item.id}
+//         renderItem={renderItem}
+//         numColumns={2}
+//         columnWrapperStyle={styles.row}
+//         contentContainerStyle={styles.listContent}
+//         showsVerticalScrollIndicator={false}
+//       />
+
+//       {/* Update button */}
+//       <View style={styles.btnContainer}>
+//         <TouchableOpacity style={styles.updateBtn} onPress={handleUpdate} activeOpacity={0.85}>
+//           <Text style={styles.updateBtnText}>Update Services</Text>
+//           <MaterialIcons name="arrow-forward" size={20} color="#fff" />
+//         </TouchableOpacity>
+//       </View>
+//     </SafeAreaView>
+//   );
+// }
+import React, { useState, useEffect, useContext } from 'react';
 import {
   View,
   Text,
@@ -6,24 +113,80 @@ import {
   FlatList,
   TouchableOpacity,
   ListRenderItemInfo,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
-import { Colors, FontFamily, FontSize, Spacing, Radius, Shadow, ButtonSize } from '@/src/shared/constants/theme';
-import { DEPARTMENTS, Department } from '@/src/features/services/constants/departments';
-import { loadSelectedServices, saveSelectedServices } from '@/src/features/services/services/storage';
+import {
+  Colors,
+  FontFamily,
+  FontSize,
+  Spacing,
+  Radius,
+  Shadow,
+  ButtonSize,
+} from '@/src/shared/constants/theme';
+import { Department } from '@/src/features/services/constants/departments';
+import { AuthContext } from '@/src/core/context/AuthContext';
+import api from '@/src/core/api/apiClient'; // ✅ make sure api instance exists
 
 export default function SelectServicesScreen() {
   const router = useRouter();
+  const auth = useContext(AuthContext);
+  const vendorId = auth?.user?.vendorId;
+
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [loading, setLoading] = useState(true);
 
+  // 🔥 Load data from API
   useEffect(() => {
-    loadSelectedServices().then((ids) => {
-      setSelected(new Set(ids));
-    });
-  }, []);
+    if (vendorId) {
+      loadDepartments();
+    }
+  }, [vendorId]);
 
+  const loadDepartments = async () => {
+    try {
+      setLoading(true);
+
+      // ✅ 1. Get all departments
+      const deptRes = await api.get('/api/Hospital/GetDeprt_HOSP');
+      const allDepts = deptRes.data || [];
+      console.log('All Departments:', allDepts);
+
+      const formattedDepartments = allDepts.map((d: any) => ({
+        id: String(d.id),
+        name: d.dep_name,
+        specialty: d.specialty || '',
+        icon: 'medical-services', // default icon (no UI change)
+      }));
+
+      setDepartments(formattedDepartments);
+
+      // ✅ 2. Get selected departments of hospital
+      const hospitalRes = await api.get(
+        `/api/Hospital/GetHospitalById/${vendorId}`
+      );
+
+      console.log('Hospital Data:', hospitalRes.data);
+
+      const selectedIds =
+        hospitalRes.data?.departments ||
+        hospitalRes.data?.dept_ids ||
+        [];
+
+      setSelected(new Set(selectedIds.map(String)));
+
+    } catch (err) {
+      console.log('❌ Load departments error', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 🔁 Toggle selection
   function toggle(id: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -32,40 +195,69 @@ export default function SelectServicesScreen() {
     });
   }
 
-  async function handleUpdate() {
-    await saveSelectedServices([...selected]);
-     router.replace('/(hospital)/services/your-services');
+  // Navigate back to YourServicesScreen (no update API available yet)
+  function handleUpdate() {
+    router.replace('/(hospital)/services/your-services');
   }
 
+  // 🎨 Render Item
   function renderItem({ item }: ListRenderItemInfo<Department>) {
     const isSelected = selected.has(item.id);
+
     return (
       <TouchableOpacity
         style={[styles.card, isSelected && styles.cardSelected]}
         onPress={() => toggle(item.id)}
-        activeOpacity={0.75}>
-        {/* Check indicator */}
-        <View style={[styles.checkCircle, isSelected && styles.checkCircleSelected]}>
-          {isSelected && <MaterialIcons name="check" size={14} color="#fff" />}
+        activeOpacity={0.75}
+      >
+        <View
+          style={[
+            styles.checkCircle,
+            isSelected && styles.checkCircleSelected,
+          ]}
+        >
+          {isSelected && (
+            <MaterialIcons name="check" size={14} color="#fff" />
+          )}
         </View>
 
-        {/* Icon */}
         <View style={styles.iconWrap}>
           <MaterialIcons
             name={item.icon as any}
             size={22}
-            color={isSelected ? Colors.light.primary : Colors.light.onSurfaceVariant}
+            color={
+              isSelected
+                ? Colors.light.primary
+                : Colors.light.onSurfaceVariant
+            }
           />
         </View>
 
-        {/* Text */}
-        <Text style={[styles.cardName, isSelected && styles.cardNameSelected]} numberOfLines={1}>
+        <Text
+          style={[
+            styles.cardName,
+            isSelected && styles.cardNameSelected,
+          ]}
+          numberOfLines={1}
+        >
           {item.name}
         </Text>
+
         <Text style={styles.cardSpecialty} numberOfLines={1}>
           {item.specialty}
         </Text>
       </TouchableOpacity>
+    );
+  }
+
+  // ⏳ Loader
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={Colors.light.primary} />
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -80,7 +272,7 @@ export default function SelectServicesScreen() {
       </View>
 
       <FlatList
-        data={DEPARTMENTS}
+        data={departments} 
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         numColumns={2}
@@ -91,7 +283,11 @@ export default function SelectServicesScreen() {
 
       {/* Update button */}
       <View style={styles.btnContainer}>
-        <TouchableOpacity style={styles.updateBtn} onPress={handleUpdate} activeOpacity={0.85}>
+        <TouchableOpacity
+          style={styles.updateBtn}
+          onPress={handleUpdate}
+          activeOpacity={0.85}
+        >
           <Text style={styles.updateBtnText}>Update Services</Text>
           <MaterialIcons name="arrow-forward" size={20} color="#fff" />
         </TouchableOpacity>
@@ -99,7 +295,6 @@ export default function SelectServicesScreen() {
     </SafeAreaView>
   );
 }
-
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
