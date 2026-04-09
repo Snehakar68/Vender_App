@@ -8,29 +8,57 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AppHeader from "@/src/shared/components/AppHeader";
+
 import { Modal } from "react-native";
 import { useState } from "react";
 import api from "@/src/core/api/apiClient";
 import { useEffect } from "react";
 import { useContext } from "react";
 import { AuthContext } from "@/src/core/context/AuthContext";
+import { useRouter } from "expo-router";
 
+
+type Nurse = {
+  id: number;
+  name: string;
+  department: number;
+  qualification: number;
+  mobile?: string;
+  email?: string;
+  is_approved?: string;
+  linked_by?: number;
+};
+
+type Department = {
+  id: number;
+  depName: string;
+};
+
+type NurseOption = {
+  id: number;
+  label: string;
+};
 
 
 
 export default function NurseListScreen() {
   const [open, setOpen] = useState(false);
-  const [nurses, setNurses] = useState([]);
+ const [nurses, setNurses] = useState<Nurse[]>([]);
+const [departments, setDepartments] = useState<Department[]>([]);
+const [allNurses, setAllNurses] = useState<NurseOption[]>([]);
   const [loading, setLoading] = useState(false);
-  const [departments, setDepartments] = useState([]);
-  const [allNurses, setAllNurses] = useState([]);
   const [selectedNurse, setSelectedNurse] = useState<any>(null);
   const [errors, setErrors] = useState<any>({});
   const [adding, setAdding] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteSuccess, setDeleteSuccess] = useState(false);
+  const [approvingId, setApprovingId] = useState<number | null>(null);
+  const [justApproved, setJustApproved] = useState<number | null>(null);
   const auth = useContext(AuthContext);
   const vendorId = auth?.user?.vendorId;
-
+  const router = useRouter();
 
   const getDegreeName = (id: number) => {
     const map: any = {
@@ -50,6 +78,8 @@ export default function NurseListScreen() {
     }
   };
   const getDepartmentName = (id: number) => {
+    if (!id || departments.length === 0) return "-";
+
     return (
       departments.find((d: any) => d.id === Number(id))?.depName || "-"
     );
@@ -106,6 +136,61 @@ export default function NurseListScreen() {
     }
   };
 
+  const handleDeleteNurse = async () => {
+    if (!deleteTarget) return;
+
+    try {
+      setDeleting(true);
+
+      await api.delete(
+        `/api/Nurse/Delete_Nurse_Linking?vendor_id=${deleteTarget.id}&hosp_Id=${vendorId}`
+      );
+
+      // ✅ remove from UI instantly
+      setNurses((prev: any) =>
+        prev.filter((n: any) => n.id !== deleteTarget.id)
+      );
+
+      setDeleteTarget(null);
+      setDeleteSuccess(true);
+
+      setTimeout(() => setDeleteSuccess(false), 2000);
+    } catch (e) {
+      console.log("❌ Delete failed", e);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleApproveNurse = async (nurseId: number) => {
+    if (approvingId) return;
+
+    try {
+      setApprovingId(nurseId);
+
+      await api.post(
+        `/api/Doctor/Approve_Doctor_Nurse/${vendorId}/${nurseId}`
+      );
+
+      // ✅ update UI instantly (same as web)
+      setNurses((prev: any) =>
+        prev.map((n: any) =>
+          n.id === nurseId
+            ? { ...n, is_approved: "Y" }
+            : n
+        )
+      );
+
+      setJustApproved(nurseId);
+      setTimeout(() => setJustApproved(null), 3000);
+
+    } catch (e) {
+      console.log("❌ Approve failed", e);
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
   useEffect(() => {
     if (open) {
       loadAvailableNurses();
@@ -114,8 +199,11 @@ export default function NurseListScreen() {
 
   useEffect(() => {
     if (vendorId) {
-      loadDepartments(); // 👈 ADD THIS
-      loadNurses();
+      const init = async () => {
+        await loadDepartments();  // ✅ wait first
+        await loadNurses();       // ✅ then map correctly
+      };
+      init();
     }
   }, [vendorId]);
 
@@ -137,12 +225,20 @@ export default function NurseListScreen() {
 
             return {
               id: n.nurse_id || n.vendor_id,
-              name: n.full_Name || n.full_name,
-              role: n.dep_id, // 👈 store raw id first
-              degree: getDegreeName(n.qualification),
+              name:
+                n.full_Name ??
+                n.full_name ??
+                n.name ??
+                n.nurse_name ??
+                "N",
+              department: n.dep_id,
+              qualification: n.qualification,
               mobile: n.mobile,
               email: n.email,
-              status: m.is_approved === "Y" ? "ACTIVE" : "INACTIVE",
+
+              // 🔥 ADD THESE (IMPORTANT)
+              is_approved: m.is_approved,
+              linked_by: m.linked_by,
             };
           } catch {
             return null;
@@ -156,40 +252,6 @@ export default function NurseListScreen() {
       setLoading(false);
     }
   };
-  // const nurses = [
-  //   {
-  //     name: "ashwani sdf",
-  //     role: "Intensive Care Unit (ICU)",
-  //     status: "INACTIVE",
-  //     degree: "ANM",
-  //     mobile: "789837789",
-  //     email: "amanu9442@gmail.com",
-  //   },
-  //   {
-  //     name: "Last Test",
-  //     role: "Inpatient Ward (IPD)",
-  //     status: "INACTIVE",
-  //     degree: "BSc Nursing",
-  //     mobile: "5487398787",
-  //     email: "bibhu@hp.com",
-  //   },
-  //   {
-  //     name: "knknjnj",
-  //     role: "Inpatient Ward (IPD)",
-  //     status: "ACTIVE",
-  //     degree: "BSc Nursing",
-  //     mobile: "8789484748",
-  //     email: "nb@nb.com",
-  //   },
-  //   {
-  //     name: "Nr Test",
-  //     role: "Outpatient Department (OPD)",
-  //     status: "ACTIVE",
-  //     degree: "GNM",
-  //     mobile: "9874894150",
-  //     email: "nbb@nbb.com",
-  //   },
-  // ];
 
   if (loading) {
     return (
@@ -199,79 +261,100 @@ export default function NurseListScreen() {
     );
   }
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
+    <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+
+      {/* ✅ FIXED HEADER (same as WorkDetails) */}
+      <View style={styles.headerWrapper}>
+        <AppHeader
+          title="Nurses"
+          subtitle="Manage your staff"
+          icon="people-outline"
+          actionText="+ Add"
+          onActionPress={() => setOpen(true)}
+        />
+      </View>
+
+      {/* ✅ SCROLLABLE CONTENT */}
       <ScrollView
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
 
-        {/* HEADER */}
-        {/* <View style={styles.header}> */}
-        <AppHeader
-          title="Nurses"
-          subtitle="Manage your staff"
-          icon="people-outline"
-          actionText="+ Add"
-          onActionPress={() => setOpen(true)} // 🔥 OPEN MODAL
-        />
-
         {/* NURSE CARDS */}
         {nurses.map((nurse, index) => (
           <View key={nurse.id} style={styles.card}>
 
-            {/* TOP ROW */}
-            <View style={styles.topRow}>
+            {/* TOP */}
+           <View style={styles.topRow}>
 
-              {/* AVATAR */}
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                  {nurse.name?.charAt(0).toUpperCase()}
-                </Text>
-              </View>
+  {/* LEFT SIDE */}
+  <View style={styles.leftContent}>
+    
+    {/* AVATAR */}
+    <View style={styles.avatar}>
+      <Text style={styles.avatarText}>
+        {(nurse.name || "N").trim().charAt(0).toUpperCase()}
+      </Text>
+    </View>
 
-              {/* INFO */}
-              <View style={{ flex: 1 }}>
-                <Text style={styles.name}>{nurse.name}</Text>
-                <Text style={styles.role}>
-                  {getDepartmentName(nurse.role)}
-                </Text>
-                <Text style={styles.degree}>{nurse.degree}</Text>
-              </View>
+    {/* TEXT */}
+    <View style={{ flex: 1 }}>
+      <Text style={styles.name}>{nurse.name}</Text>
 
-              {/* RIGHT SIDE */}
-              <View style={{ alignItems: "flex-end" }}>
+      <View style={styles.departmentBadge}>
+        <Text style={styles.departmentText}>
+          {getDepartmentName(nurse.department)}
+        </Text>
+      </View>
 
-                {/* STATUS */}
-                <View
-                  style={[
-                    styles.statusBadge,
-                    nurse.status === "ACTIVE"
-                      ? styles.activeBadge
-                      : styles.inactiveBadge,
-                  ]}
-                >
-                  <Text style={styles.statusText}>{nurse.status}</Text>
-                </View>
+      <View style={styles.degreeBadge}>
+        <Ionicons name="school-outline" size={12} color="#475569" />
+        <Text style={styles.degreeText}>
+          {getDegreeName(nurse.qualification)}
+        </Text>
+      </View>
+    </View>
 
-                {/* ICONS */}
-                <View style={styles.iconRow}>
-                  <TouchableOpacity style={styles.iconBtn}>
-                    <Ionicons name="checkmark" size={16} color="#16A34A" />
-                  </TouchableOpacity>
+  </View>
 
-                  <TouchableOpacity style={styles.iconBtn}>
-                    <Ionicons name="trash" size={16} color="#DC2626" />
-                  </TouchableOpacity>
-                </View>
-              </View>
+  {/* 🔥 STATUS (TOP RIGHT) */}
+  <View style={styles.statusWrapper}>
+    <View style={styles.statusBadgeNew}>
+      <Text style={styles.statusTextNew}>
+        {nurse.is_approved === "Y" ? "Active" : "Inactive"}
+      </Text>
+    </View>
+  </View>
+
+</View>
+
+            {/* ACTION ROW */}
+            <View style={styles.actionRow}>
+
+              {/* VIEW PROFILE */}
+              <TouchableOpacity
+                style={styles.viewBtnNew}
+                onPress={() =>
+                  router.push({
+                    pathname: "/(doctor)/view-nurse",
+                    params: { nurseId: nurse.id },
+                  })
+                }
+              >
+                <Ionicons name="eye-outline" size={16} color="#fff" />
+                <Text style={styles.viewTextNew}>View Profile</Text>
+              </TouchableOpacity>
+
+              {/* DELETE */}
+              <TouchableOpacity
+                style={styles.deleteBtnNew}
+                onPress={() => setDeleteTarget(nurse)}
+              >
+                <Ionicons name="trash-outline" size={16} color="#DC2626" />
+              </TouchableOpacity>
+
             </View>
-
-            {/* BUTTON */}
-            <TouchableOpacity style={styles.viewProfileBtn}>
-              <Text style={styles.viewProfileText}>View Profile</Text>
-            </TouchableOpacity>
-
           </View>
         ))}
       </ScrollView>
@@ -286,51 +369,51 @@ export default function NurseListScreen() {
             </View>
 
             {/* SELECT (Simple version) */}
-          <TouchableOpacity
-  style={styles.selectBox}
-  onPress={() => setShowDropdown(!showDropdown)}
->
-  <Text style={{ color: selectedNurse ? "#000" : "#64748B" }}>
-    {selectedNurse?.label || "Select Nurse"}
-  </Text>
-</TouchableOpacity>
+            <TouchableOpacity
+              style={styles.selectBox}
+              onPress={() => setShowDropdown(!showDropdown)}
+            >
+              <Text style={{ color: selectedNurse ? "#000" : "#64748B" }}>
+                {selectedNurse?.label || "Select Nurse"}
+              </Text>
+            </TouchableOpacity>
 
             {/* OPTIONS LIST */}
-         {showDropdown && (
-  <View style={{ maxHeight: 150 }}>
-    <ScrollView>
-      {allNurses.map((nurse) => (
-        <TouchableOpacity
-          key={nurse.id}
-          onPress={() => {
-            setSelectedNurse(nurse);
-            setShowDropdown(false);
-            setErrors({});
-          }}
-          style={{
-            padding: 10,
-            borderBottomWidth: 1,
-            borderColor: "#eee",
-          }}
-        >
-          <Text>{nurse.label}</Text>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
-  </View>
-)}
+            {showDropdown && (
+              <View style={{ maxHeight: 150 }}>
+                <ScrollView>
+                  {allNurses.map((nurse) => (
+                    <TouchableOpacity
+                      key={nurse.id}
+                      onPress={() => {
+                        setSelectedNurse(nurse);
+                        setShowDropdown(false);
+                        setErrors({});
+                      }}
+                      style={{
+                        padding: 10,
+                        borderBottomWidth: 1,
+                        borderColor: "#eee",
+                      }}
+                    >
+                      <Text>{nurse.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
 
             {/* BUTTONS */}
             <View style={styles.modalActions}>
-             <TouchableOpacity
-  style={styles.cancelBtn}
-  onPress={() => {
-    setOpen(false);
-    setSelectedNurse(null);
-    setShowDropdown(false);
-    setErrors({});
-  }}
->
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => {
+                  setOpen(false);
+                  setSelectedNurse(null);
+                  setShowDropdown(false);
+                  setErrors({});
+                }}
+              >
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
 
@@ -347,6 +430,48 @@ export default function NurseListScreen() {
           </View>
         </View>
       </Modal>
+      <Modal visible={!!deleteTarget} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+
+            <Text style={{ marginBottom: 15 }}>
+              Are you sure you want to delete{" "}
+              <Text style={{ fontWeight: "600" }}>
+                {deleteTarget?.name}
+              </Text>?
+            </Text>
+
+            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setDeleteTarget(null)}
+              >
+                <Text>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.addBtnModal, deleting && { opacity: 0.5 }]}
+                onPress={handleDeleteNurse}
+                disabled={deleting}
+              >
+                <Text style={{ color: "#fff" }}>
+                  {deleting ? "Deleting..." : "Delete"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+          </View>
+        </View>
+      </Modal>
+      <Modal visible={deleteSuccess} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={{ color: "green", textAlign: "center" }}>
+              Nurse deleted successfully
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -355,8 +480,8 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     backgroundColor: "#F1F5F9",
     paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 80, // 🔥 prevents bottom overlap
+    paddingTop: 12,   // 🔥 reduced (header already separate)
+    paddingBottom: 80,
   },
   header: {
     flexDirection: "row",
@@ -364,7 +489,129 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20, // more spacing
   },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
 
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+
+  topRow: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "flex-start", // 🔥 aligns top
+  marginBottom: 12,
+},
+
+leftContent: {
+  flexDirection: "row",
+  flex: 1,
+},
+
+statusWrapper: {
+  justifyContent: "flex-start",
+  alignItems: "flex-end",
+},
+
+  avatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#0F766E",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+
+  avatarText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+
+  name: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+
+  degree: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+  },
+
+  /* 🔥 DEPARTMENT BADGE */
+  departmentBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "#E0F2FE",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    marginTop: 4,
+  },
+
+  departmentText: {
+    color: "#0369A1",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+
+  /* 🔥 STATUS */
+  statusBadgeNew: {
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+
+  statusTextNew: {
+    color: "#166534",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+
+  /* 🔥 ACTION ROW */
+  actionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+
+  /* 🔥 VIEW BUTTON (PRIMARY CTA) */
+  viewBtnNew: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 6,
+
+  backgroundColor: "#2cc7ff", // 🔥 Indigo (premium SaaS color)
+  paddingVertical: 10,
+  paddingHorizontal: 14,
+  borderRadius: 10,
+
+  shadowColor: "#4F46E5",
+  shadowOpacity: 0.7,
+  shadowRadius: 6,
+  elevation: 4,
+},
+
+viewTextNew: {
+  color: "#fff",
+  fontSize: 13,
+  fontWeight: "700", // 🔥 slightly stronger CTA
+},
+
+  /* 🔥 DELETE BUTTON */
+  deleteBtnNew: {
+    backgroundColor: "#FEE2E2",
+    padding: 10,
+    borderRadius: 10,
+  },
   brand: {
     fontSize: 12,
     color: "#0F766E",
@@ -389,40 +636,13 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 14,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 3,
-  },
 
-  topRow: {
-    flexDirection: "row",
-    marginBottom: 10,
-  },
   iconBtn: {
     backgroundColor: "#F1F5F9",
     padding: 6,
     borderRadius: 8,
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#0F766E",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 10,
-  },
 
-  name: {
-    fontWeight: "600",
-    fontSize: 14,
-  },
 
   role: {
     fontSize: 12,
@@ -469,19 +689,6 @@ const styles = StyleSheet.create({
   viewText: {
     fontSize: 12,
   },
-
-  approveBtn: {
-    backgroundColor: "#DCFCE7",
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-
-  approveText: {
-    color: "#166534",
-    fontSize: 12,
-  },
-
   deleteBtn: {
     backgroundColor: "#FEE2E2",
     paddingHorizontal: 12,
@@ -492,16 +699,7 @@ const styles = StyleSheet.create({
   deleteText: {
     fontSize: 12,
   },
-  avatarText: {
-    color: "#fff",
-    fontWeight: "700",
-  },
 
-  degree: {
-    fontSize: 12,
-    color: "#475569",
-    marginTop: 2,
-  },
 
   statusBadge: {
     paddingHorizontal: 10,
@@ -632,4 +830,105 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
   },
+  rightContainer: {
+    alignItems: "flex-end",
+    justifyContent: "center",
+    minWidth: 110, // 🔥 stabilizes layout
+  },
+
+  statusTextFixed: {
+    fontSize: 11,
+    fontWeight: "600",
+    marginBottom: 6,
+    color: "#475569",
+  },
+
+  iconRowFixed: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  approveWrapper: {
+    minWidth: 80, // 🔥 VERY IMPORTANT (fixes jumping)
+    alignItems: "center",
+  },
+
+  approveBtn: {
+    backgroundColor: "#16A34A",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+
+  approveText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+
+  approvedBadge: {
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+
+  approvedText: {
+    color: "#166534",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+
+  disabledApprove: {
+    backgroundColor: "#E5E7EB",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+
+  disabledText: {
+    color: "#6B7280",
+    fontSize: 11,
+  },
+
+  deleteBtnFixed: {
+    backgroundColor: "#FEE2E2",
+    padding: 6,
+    borderRadius: 6,
+  },
+  headerWrapper: {
+    backgroundColor: "#fff",
+
+    borderBottomWidth: 0.5,
+    borderColor: "#E2E8F0",
+
+    elevation: 3,
+    zIndex: 10,
+
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  degreeBadge: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 4,
+
+  alignSelf: "flex-start",
+
+  backgroundColor: "#F1F5F9",  // subtle gray
+  paddingHorizontal: 8,
+  paddingVertical: 3,
+  borderRadius: 8,
+
+  marginTop: 6,
+},
+
+degreeText: {
+  fontSize: 11,
+  fontWeight: "500",
+  color: "#475569",
+},
 });

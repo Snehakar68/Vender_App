@@ -71,6 +71,7 @@ export default function DoctorLayout() {
         <Tabs.Screen name="professional-details" options={{ href: null }} />
         <Tabs.Screen name="bank-details" options={{ href: null }} />
         <Tabs.Screen name="privacy-policy" options={{ href: null }} />
+        <Tabs.Screen name="view-nurse" options={{ href: null }} />
       </Tabs>
     </ProtectedLayout>
   );

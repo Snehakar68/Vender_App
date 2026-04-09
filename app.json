@@ -1,7 +1,6 @@
 {
   "expo": {
     "icon": "./src/assets/images/icon.png",
-
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -10,11 +9,9 @@
         "monochromeImage": "./src/assets/images/android-icon-monochrome.png"
       }
     },
-
     "web": {
       "favicon": "./src/assets/images/favicon.png"
     },
-
     "plugins": [
       [
         "expo-splash-screen",
@@ -24,7 +21,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
+      "expo-web-browser"
     ]
   }
 }

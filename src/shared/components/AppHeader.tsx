@@ -15,7 +15,7 @@ export default function AppHeader({
   onActionPress?: () => void;
 }) {
   return (
-    <View style={styles.header}>
+    <View style={styles.container}>
       {/* LEFT */}
       <View style={styles.left}>
         {icon && (
@@ -24,18 +24,27 @@ export default function AppHeader({
           </View>
         )}
 
-        <View>
-          <Text style={styles.title}>{title}</Text>
-          {subtitle && (
-            <Text style={styles.subtitle}>{subtitle}</Text>
+        <View style={styles.textContainer}>
+          <Text numberOfLines={1} style={styles.title}>
+            {title}
+          </Text>
+
+          {!!subtitle && (
+            <Text numberOfLines={1} style={styles.subtitle}>
+              {subtitle}
+            </Text>
           )}
         </View>
       </View>
 
       {/* RIGHT */}
       {actionText && (
-        <TouchableOpacity style={styles.btn} onPress={onActionPress}>
-          <Text style={styles.btnText}>{actionText}</Text>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          style={styles.button}
+          onPress={onActionPress}
+        >
+          <Text style={styles.buttonText}>{actionText}</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -43,46 +52,61 @@ export default function AppHeader({
 }
 
 const styles = StyleSheet.create({
-  header: {
+  container: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+
+    height: 56, // 🔥 perfect professional height
+    paddingHorizontal: 16,
+
+    backgroundColor: "#fff",
   },
 
   left: {
     flexDirection: "row",
     alignItems: "center",
+    flex: 1,
   },
 
   iconBox: {
-    width: 36,
-    height: 36,
+    width: 34,
+    height: 34,
     borderRadius: 10,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#F1F5F9",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 10,
   },
 
+  textContainer: {
+    justifyContent: "center",
+    flexShrink: 1,
+  },
+
   title: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
+    color: "#0F172A",
   },
 
   subtitle: {
     fontSize: 12,
     color: "#64748B",
+    marginTop: 1,
   },
 
-  btn: {
-    backgroundColor: "#0F766E",
+  button: {
+    height: 34,
     paddingHorizontal: 14,
-    paddingVertical: 8,
     borderRadius: 10,
+    backgroundColor: "#0F766E",
+
+    justifyContent: "center",
+    alignItems: "center",
   },
 
-  btnText: {
+  buttonText: {
     color: "#fff",
     fontSize: 13,
     fontWeight: "600",
