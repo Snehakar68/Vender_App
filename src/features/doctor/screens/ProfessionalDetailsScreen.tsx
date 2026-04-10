@@ -1,4 +1,4 @@
- import AppHeader from "@/src/shared/components/AppHeader";
+import AppHeader from "@/src/shared/components/AppHeader";
 import {
   View,
   Text,
@@ -6,25 +6,53 @@ import {
   ScrollView,
   TextInput,
   TouchableOpacity,
+  StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+// 🔥 NAVIGATION IMPORTS
+import { useRouter, useFocusEffect } from "expo-router";
+import { BackHandler } from "react-native";
+import { useCallback } from "react";
+
 export default function ProfessionalDetailsScreen() {
+  const router = useRouter();
+
+  // 🔥 EXACT SAME BACK BEHAVIOR AS VIEWNURSE / PERSONAL
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        router.replace("/(doctor)/profile"); // ✅ change if needed
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress
+      );
+
+      return () => subscription.remove();
+    }, [])
+  );
+
   return (
-    <SafeAreaView style={{ flex: 1 }}>
+    <View style={{ flex: 1 }}>
+
+      {/* ✅ FIXED HEADER (OUTSIDE SCROLL) */}
+      <View style={styles.headerWrapper}>
+        <AppHeader
+          title="Professional Information"
+          subtitle="Manage your professional details"
+          icon="briefcase-outline"
+          actionText="Edit"
+        />
+      </View>
+
+      {/* ✅ SCROLLABLE CONTENT */}
       <ScrollView
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
-
-        {/* HEADER */}
-       <AppHeader
-  title="Professional Information"
-  subtitle="Manage your professional details"
-  icon="briefcase-outline"
-  actionText="Edit"
-  onActionPress={() => {}}
-/>
 
         {/* DETAILS CARD */}
         <View style={styles.card}>
@@ -48,9 +76,10 @@ export default function ProfessionalDetailsScreen() {
         </TouchableOpacity>
 
       </ScrollView>
-    </SafeAreaView>
+      </View>
   );
 }
+
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
@@ -59,22 +88,23 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
+  // 🔥 SAME HEADER STYLE AS OTHER SCREENS
+ headerWrapper: {
+    backgroundColor: "#fff",
 
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
-  },
+    paddingTop: StatusBar.currentHeight || 0, // ✅ THIS FIXES IT
 
-  edit: {
-    color: "#0F766E",
-    fontWeight: "600",
-  },
+    borderBottomWidth: 0.5,
+    borderColor: "#E2E8F0",
 
+    elevation: 3,
+    zIndex: 10,
+
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
   card: {
     backgroundColor: "#fff",
     borderRadius: 14,
@@ -126,18 +156,16 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 });
+
 function Input({ label, value }: { label: string; value: string }) {
   return (
     <View style={{ marginBottom: 14 }}>
       <Text style={styles.label}>{label}</Text>
-      <TextInput
-        style={styles.input}
-        value={value}
-        editable={false}
-      />
+      <TextInput style={styles.input} value={value} editable={false} />
     </View>
   );
 }
+
 function DocButton({ label }: { label: string }) {
   return (
     <TouchableOpacity style={styles.docBtn}>

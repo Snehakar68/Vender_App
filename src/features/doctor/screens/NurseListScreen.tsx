@@ -5,6 +5,7 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  StatusBar,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -260,7 +261,7 @@ if (loading) {
   );
 }
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+    <View style={{ flex: 1 }}>
 
       {/* ✅ FIXED HEADER (same as WorkDetails) */}
       <View style={styles.headerWrapper}>
@@ -522,7 +523,7 @@ if (loading) {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+     </View>
   );
 }
 const styles = StyleSheet.create({
@@ -530,7 +531,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     backgroundColor: "#F1F5F9",
     paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingTop: 16,
     paddingBottom: 80, // 🔥 prevents bottom overlap
   },
   header: {
@@ -946,20 +947,22 @@ emptyText: {
     padding: 6,
     borderRadius: 6,
   },
-  headerWrapper: {
-    backgroundColor: "#fff",
+headerWrapper: {
+  backgroundColor: "#fff",
 
-    borderBottomWidth: 0.5,
-    borderColor: "#E2E8F0",
+  paddingTop: StatusBar.currentHeight || 0, // ✅ THIS FIXES IT
 
-    elevation: 3,
-    zIndex: 10,
+  borderBottomWidth: 0.5,
+  borderColor: "#E2E8F0",
 
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-  },
+  elevation: 3,
+  zIndex: 10,
+
+  shadowColor: "#000",
+  shadowOpacity: 0.05,
+  shadowRadius: 4,
+  shadowOffset: { width: 0, height: 2 },
+},
   loader: {
   flex: 1,
   justifyContent: "center",

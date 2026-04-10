@@ -17,6 +17,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import CityStatePin from "@/src/shared/components/CityAutocomplete";
 import GoogleMapPicker from "@/src/shared/components/GoogleMapPicker";
 import { Modal } from "react-native";
+
 import {
   KeyboardAvoidingView,
   Platform,

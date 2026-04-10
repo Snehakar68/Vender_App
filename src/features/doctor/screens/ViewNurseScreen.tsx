@@ -6,6 +6,7 @@ import {
     Image,
     TouchableOpacity,
     Modal,
+    StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
@@ -193,7 +194,7 @@ export default function ViewNurseScreen() {
     }
 
     return (
-        <SafeAreaView style={{ flex: 1 }}>
+        <View style={{ flex: 1 }}>
 
             {/* ✅ FIXED HEADER */}
             <View style={styles.headerWrapper}>
@@ -366,7 +367,7 @@ export default function ViewNurseScreen() {
                     </View>
                 </Modal>
             </ScrollView>
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -380,11 +381,11 @@ const Info = ({ label, value }: any) => (
 
 /* 🔹 Styles */
 const styles = StyleSheet.create({
-   container: {
-  padding: 16,
-  paddingTop: 12, // 🔥 reduced (header already separated)
-  backgroundColor: "#F1F5F9",
-},
+    container: {
+        padding: 16,
+        paddingTop: 12, // 🔥 reduced (header already separated)
+        backgroundColor: "#F1F5F9",
+    },
     header: {
         flexDirection: "row",
         justifyContent: "space-between",
@@ -397,6 +398,8 @@ const styles = StyleSheet.create({
     },
     headerWrapper: {
         backgroundColor: "#fff",
+
+        paddingTop: StatusBar.currentHeight || 0, // ✅ THIS FIXES IT
 
         borderBottomWidth: 0.5,
         borderColor: "#E2E8F0",

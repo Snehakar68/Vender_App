@@ -6,18 +6,34 @@ import {
   ScrollView,
   TextInput,
   TouchableOpacity,
+  StatusBar,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter, useFocusEffect } from "expo-router";
+import { BackHandler } from "react-native";
+import { useCallback } from "react";
 
 export default function BankDetailsScreen() {
-  return (
-    <SafeAreaView style={{ flex: 1 }}>
-      <ScrollView
-        contentContainerStyle={styles.container}
-        showsVerticalScrollIndicator={false}
-      >
+  const router = useRouter();
+  useFocusEffect(
+  useCallback(() => {
+    const onBackPress = () => {
+      router.replace("/(doctor)/profile"); // 🔥 change if needed
+      return true;
+    };
 
-        {/* HEADER */}
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      onBackPress
+    );
+
+    return () => subscription.remove();
+  }, [])
+);
+  return (
+    <View style={{ flex: 1 }}>
+
+      {/* ✅ FIXED HEADER */}
+      <View style={styles.headerWrapper}>
         <AppHeader
           title="Bank Details"
           subtitle="Manage your bank information"
@@ -25,8 +41,15 @@ export default function BankDetailsScreen() {
           actionText="Edit"
           onActionPress={() => { }}
         />
+      </View>
 
-        {/* BANK CARD */}
+      {/* ✅ SCROLLABLE CONTENT */}
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+      >
+
+        {/* CARD */}
         <View style={styles.card}>
           <Input label="Bank Name *" value="HDFC Bank" />
           <Input label="Branch *" value="Patna Main Branch" />
@@ -43,15 +66,31 @@ export default function BankDetailsScreen() {
         </TouchableOpacity>
 
       </ScrollView>
-    </SafeAreaView>
+
+    </View>
   );
 }
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8FAFC",
     padding: 16,
-    paddingBottom: 40,
+  },
+  headerWrapper: {
+    backgroundColor: "#fff",
+
+    paddingTop: StatusBar.currentHeight || 0, // ✅ THIS FIXES IT
+
+    borderBottomWidth: 0.5,
+    borderColor: "#E2E8F0",
+
+    elevation: 3,
+    zIndex: 10,
+
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
   },
 
   header: {

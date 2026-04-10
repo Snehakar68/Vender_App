@@ -5,6 +5,7 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AppHeader from "@/src/shared/components/AppHeader";
@@ -75,7 +76,7 @@ export default function WorkDetailsScreen() {
     );
   }
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+    <View style={{ flex: 1 }}>
       {/* HEADER */}
       <View style={styles.headerWrapper}>
         <AppHeader
@@ -276,7 +277,7 @@ export default function WorkDetailsScreen() {
           </View>
         </View>
       )}
-    </SafeAreaView>
+     </View>
   );
 }
 
@@ -289,13 +290,22 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 40,
   },
+headerWrapper: {
+  backgroundColor: "#fff",
 
-  headerWrapper: {
-    backgroundColor: "#fff",
-    borderBottomWidth: 0.5,
-    borderColor: "#E2E8F0",
-    elevation: 3,
-  },
+  paddingTop: StatusBar.currentHeight || 0, // ✅ THIS FIXES IT
+
+  borderBottomWidth: 0.5,
+  borderColor: "#E2E8F0",
+
+  elevation: 3,
+  zIndex: 10,
+
+  shadowColor: "#000",
+  shadowOpacity: 0.05,
+  shadowRadius: 4,
+  shadowOffset: { width: 0, height: 2 },
+},
 
   loader: {
     flex: 1,

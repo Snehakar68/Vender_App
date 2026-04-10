@@ -12,7 +12,7 @@ export default function AppHeader({
   subtitle?: string;
   icon?: any;
   actionText?: string;
-  onActionPress?: () => void;
+  onActionPress?: () => void; 
 }) {
   return (
     <View style={styles.container}>

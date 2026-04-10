@@ -6,6 +6,7 @@ import {
   ScrollView,
   TextInput,
   ActivityIndicator,
+  StatusBar,
 } from "react-native";
 import { useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -214,7 +215,7 @@ export default function ServicesScreen() {
   }
   return (
 
-    <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
+ <View style={{ flex: 1 }}>
       <View style={styles.headerWrapper}>
         <AppHeader
           title="Services"
@@ -410,7 +411,7 @@ export default function ServicesScreen() {
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 const styles = StyleSheet.create({
@@ -419,12 +420,22 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8FAFC",
     padding: 16,
   },
-  headerWrapper: {
-    backgroundColor: "#fff",
-    borderBottomWidth: 0.5,
-    borderColor: "#E2E8F0",
-    elevation: 3,
-  },
+ headerWrapper: {
+   backgroundColor: "#fff",
+ 
+   paddingTop: StatusBar.currentHeight || 0, // ✅ THIS FIXES IT
+ 
+   borderBottomWidth: 0.5,
+   borderColor: "#E2E8F0",
+ 
+   elevation: 3,
+   zIndex: 10,
+ 
+   shadowColor: "#000",
+   shadowOpacity: 0.05,
+   shadowRadius: 4,
+   shadowOffset: { width: 0, height: 2 },
+ },
 
   card: {
     backgroundColor: "#FFFFFF",
