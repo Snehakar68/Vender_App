@@ -133,9 +133,10 @@ export default function AddWorkDetailsModal({
 
       const formData = new FormData();
 
-      if (editData?.id) {
-        formData.append("work_Id", editData.id);
-      }
+     if (editData?.hosp_Id) {
+  formData.append("work_Id", editData.hosp_Id);
+}
+
 
       formData.append("vendor_id", doctorId);
       formData.append("Hosp_Id", form.hosp_Id);
@@ -168,6 +169,19 @@ export default function AddWorkDetailsModal({
       setLoading(false);
     }
   };
+  useEffect(() => {
+  if (!open) {
+    setForm({
+      hosp_Id: "",
+      consFee: "",
+      opdDays: [],
+      slotStart: "",
+      opD_To: "",
+      max_OPD: "",
+    });
+    setErrors({});
+  }
+}, [open]);
   return (
     <Modal visible={open} transparent animationType="fade">
       <View style={styles.overlay}>
@@ -189,17 +203,22 @@ export default function AddWorkDetailsModal({
             <Field label="Hospital" required>
 
               {/* SELECT BOX */}
-              <TouchableOpacity
-                onPress={() => setHospitalOpen(!hospitalOpen)}
-                style={{
-                  borderWidth: 1,
-                  borderColor: "#E2E8F0",
-                  borderRadius: 10,
-                  padding: 12,
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
+     <TouchableOpacity
+  disabled={!!editData}
+  onPress={() => {
+    if (!editData) setHospitalOpen(!hospitalOpen);
+  }}
+             style={{
+  borderWidth: 1,
+  borderColor: "#E2E8F0",
+  borderRadius: 10,
+  padding: 12,
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  backgroundColor: editData ? "#F1F5F9" : "#fff",   // ✅ add this
+  opacity: editData ? 0.7 : 1,                     // ✅ add this
+}}
               >
                 <Text style={{ fontSize: 13 }}>
                   {form.hosp_Id

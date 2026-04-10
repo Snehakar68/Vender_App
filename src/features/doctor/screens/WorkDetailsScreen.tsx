@@ -69,7 +69,7 @@ export default function WorkDetailsScreen() {
   if (loading) {
     return (
       <View style={styles.loader}>
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color="#0F766E" />
         <Text style={{ marginTop: 8 }}>Loading work details...</Text>
       </View>
     );
@@ -105,9 +105,13 @@ export default function WorkDetailsScreen() {
       {/* EMPTY STATE */}
       {!data.length ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyText}>
-            No work details added yet
-          </Text>
+          <View style={{ alignItems: "center" }}>
+            <Ionicons name="briefcase-outline" size={40} color="#CBD5E1" />
+            <Text style={styles.emptyTitle}>No Work Details</Text>
+            <Text style={styles.emptyText}>
+              Start by adding your hospital schedule
+            </Text>
+          </View>
         </View>
       ) : (
         <ScrollView
@@ -165,19 +169,30 @@ export default function WorkDetailsScreen() {
                 <View style={{ flexDirection: "row", gap: 16 }}>
 
                   {/* EDIT */}
-                  <TouchableOpacity
-                    onPress={() => {
-                      setEditData(item);
-                      setOpen(true);
-                    }}
-                  >
-                    <Ionicons name="create-outline" size={18} color="#2563EB" />
-                  </TouchableOpacity>
+                  <View style={styles.actionGroup}>
 
-                  {/* DELETE */}
-                  <TouchableOpacity onPress={() => setDeleteModal(item)}>
-                    <Ionicons name="trash-outline" size={18} color="#DC2626" />
-                  </TouchableOpacity>
+                    {/* EDIT */}
+                    <TouchableOpacity
+                      style={styles.editBtnIcon}
+                      onPress={() => {
+                        setEditData(item);
+                        setOpen(true);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="create-outline" size={18} color="#2563EB" />
+                    </TouchableOpacity>
+
+                    {/* DELETE */}
+                    <TouchableOpacity
+                      style={styles.deleteBtnIcon}
+                      onPress={() => setDeleteModal(item)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="trash-outline" size={18} color="#DC2626" />
+                    </TouchableOpacity>
+
+                  </View>
 
                 </View>
 
@@ -213,54 +228,54 @@ export default function WorkDetailsScreen() {
               </View>
             </View>
           ))}
-       
+
         </ScrollView>
-        
+
       )}
-         {deleteModal && (
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalBox}>
-                <Text style={{ fontSize: 16, fontWeight: "700", marginBottom: 10 }}>
-                  Confirm Deletion
+      {deleteModal && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={{ fontSize: 16, fontWeight: "700", marginBottom: 10 }}>
+              Confirm Deletion
+            </Text>
+
+            <Text style={{ textAlign: "center", marginBottom: 20, color: "#475569" }}>
+              Are you sure you want to delete work details for{" "}
+              <Text style={{ fontWeight: "600", color: "#0F172A" }}>
+                {getHospitalName(deleteModal.hosp_Id)}
+              </Text>?
+            </Text>
+
+            <View style={{ flexDirection: "row", gap: 10, width: "100%" }}>
+
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setDeleteModal(null)}
+              >
+                <Text style={{ color: "#475569", fontWeight: "500" }}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.deleteConfirm}
+                onPress={async () => {
+                  try {
+                    setDeleting(true);
+                    await remove(deleteModal.hosp_Id);
+                  } finally {
+                    setDeleting(false);
+                    setDeleteModal(null);
+                  }
+                }}
+              >
+                <Text style={{ color: "#fff", fontWeight: "600" }}>
+                  {deleting ? "Deleting..." : "Delete"}
                 </Text>
+              </TouchableOpacity>
 
-                <Text style={{ textAlign: "center", marginBottom: 20, color: "#475569" }}>
-                  Are you sure you want to delete work details for{" "}
-                  <Text style={{ fontWeight: "600", color: "#0F172A" }}>
-                    {getHospitalName(deleteModal.hosp_Id)}
-                  </Text>?
-                </Text>
-
-                <View style={{ flexDirection: "row", gap: 10, width: "100%" }}>
-
-                  <TouchableOpacity
-                    style={styles.cancelBtn}
-                    onPress={() => setDeleteModal(null)}
-                  >
-                    <Text style={{ color: "#475569", fontWeight: "500" }}>Cancel</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.deleteConfirm}
-                    onPress={async () => {
-                      try {
-                        setDeleting(true);
-                        await remove(deleteModal.hosp_Id);
-                      } finally {
-                        setDeleting(false);
-                        setDeleteModal(null);
-                      }
-                    }}
-                  >
-                    <Text style={{ color: "#fff", fontWeight: "600" }}>
-                      {deleting ? "Deleting..." : "Delete"}
-                    </Text>
-                  </TouchableOpacity>
-
-                </View>
-              </View>
             </View>
-          )}
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -286,6 +301,13 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "#F8FAFC", // match app bg
+  },
+
+  loaderText: {
+    marginTop: 10,
+    fontSize: 13,
+    color: "#64748B",
   },
 
   empty: {
@@ -301,10 +323,17 @@ const styles = StyleSheet.create({
 
   card: {
     backgroundColor: "#fff",
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 12,
-    elevation: 2,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 14,
+
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
+
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
   },
 
   topRow: {
@@ -314,14 +343,14 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 13,
-    fontWeight: "600",
-    flex: 1,
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
   },
 
   statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 20,
   },
 
@@ -335,7 +364,7 @@ const styles = StyleSheet.create({
 
   statusText: {
     fontSize: 10,
-    fontWeight: "600",
+    fontWeight: "700",
   },
 
   grid: {
@@ -346,18 +375,19 @@ const styles = StyleSheet.create({
 
   infoBox: {
     width: "48%",
-    marginBottom: 8,
+    marginBottom: 12,
   },
 
   label: {
-    fontSize: 10,
+    fontSize: 11,
     color: "#64748B",
   },
 
   value: {
-    fontSize: 12,
-    fontWeight: "500",
+    fontSize: 13,
+    fontWeight: "600",
     marginTop: 2,
+    color: "#0F172A",
   },
 
   actions: {
@@ -367,11 +397,10 @@ const styles = StyleSheet.create({
   },
   approveButton: {
     backgroundColor: "#16A34A",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
   },
-
   approveDisabled: {
     backgroundColor: "#E5E7EB",
   },
@@ -379,9 +408,14 @@ const styles = StyleSheet.create({
   approveText: {
     color: "#fff",
     fontSize: 12,
-    fontWeight: "600",
+    fontWeight: "700",
   },
-
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    marginTop: 10,
+    color: "#0F172A",
+  },
   approvedBadge: {
     backgroundColor: "#DCFCE7",
     paddingHorizontal: 12,
@@ -455,10 +489,39 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: "center",
   },
+  actionGroup: {
+    flexDirection: "row",
+    gap: 10,
+  },
+
+  editBtnIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#EFF6FF", // light blue
+
+    justifyContent: "center",
+    alignItems: "center",
+
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+  },
+
+  deleteBtnIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#FEF2F2", // light red
+
+    justifyContent: "center",
+    alignItems: "center",
+
+    borderWidth: 1,
+    borderColor: "#FEE2E2",
+  },
 });
 
 /* ================= COMPONENTS ================= */
-
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.infoBox}>
