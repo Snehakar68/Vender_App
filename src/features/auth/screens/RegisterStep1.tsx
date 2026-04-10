@@ -21,6 +21,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
 } from "react-native";    
+import { SafeAreaView } from "react-native-safe-area-context";
 
 
 export default function RegisterStep1() {
@@ -119,6 +120,7 @@ export default function RegisterStep1() {
   };
 
 return (
+   <SafeAreaView style={{ flex: 1 }}>
   <KeyboardAvoidingView
     style={{ flex: 1 }}
     behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -268,7 +270,10 @@ return (
       </View>
         </ScrollView>
     </TouchableWithoutFeedback>
+    
   </KeyboardAvoidingView>
+    </SafeAreaView>
+  
 );
 }
 

@@ -7,22 +7,49 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { getUserData } from "@/src/utils/tokenStorage";
+import { useEffect, useState } from "react";
+import { Image } from "react-native";
 
 export default function HomeScreen() {
+  const [userName, setUserName] = useState("");
+  useEffect(() => {
+    const loadUser = async () => {
+      const user = await getUserData();
+      setUserName(user?.name || "User");
+    };
+
+    loadUser();
+  }, []);
   return (
-    <SafeAreaView style={{ flex: 1 }}>
-      <ScrollView
-        contentContainerStyle={styles.container}
-        showsVerticalScrollIndicator={false}
-      >
+<View style={{ flex: 1 }}>
+  {/* 🔥 FIXED HEADER */}
+  <View style={styles.topHeader}>
+    <View style={styles.logoContainer}>
+      <Image
+        source={require("@/src/assets/images/logo.png")}
+        style={styles.logo}
+        resizeMode="contain"
+      />
+      <Text style={styles.companyName}>Jhilmil Homecare</Text>
+    </View>
+  </View>
+
+  {/* 🔽 SCROLLABLE CONTENT */}
+  <ScrollView
+    contentContainerStyle={styles.container}
+    showsVerticalScrollIndicator={false}
+  >
 
         {/* HEADER */}
-        <View style={styles.header}>
-          <Text style={styles.greeting}>Morning, Jhilmil Homecare</Text>
-          <Text style={styles.subText}>
-            Your care queue is ready for the day.
-          </Text>
-        </View>
+   <View style={styles.greetingCard}>
+  <View>
+    <Text style={styles.greetingSmall}>Good Morning</Text>
+    <Text style={styles.greetingName}>{userName}</Text>
+  </View>
+
+  <Ionicons name="sunny-outline" size={28} color="#0F766E" />
+</View>
 
         {/* ALERT */}
         <TouchableOpacity style={styles.alertBox}>
@@ -35,15 +62,19 @@ export default function HomeScreen() {
 
         {/* STATS */}
         <View style={styles.row}>
-          <StatCard number="8" label="Upcoming" />
-          <StatCard number="3" label="My Patients" />
+          <StatCard number="8" label="Upcoming" icon="calendar-outline" />
+<StatCard number="3" label="Patients" icon="people-outline" />
         </View>
 
         {/* TASKS */}
-        <View style={styles.taskCard}>
-          <Text style={styles.taskTitle}>Daily Clinical Tasks</Text>
-          <Text style={styles.taskCount}>5 Tasks Left</Text>
-        </View>
+  <View style={styles.taskCardNew}>
+  <View>
+    <Text style={styles.taskTitleNew}>Today's Tasks</Text>
+    <Text style={styles.taskCountNew}>5 Pending Tasks</Text>
+  </View>
+
+  <Ionicons name="arrow-forward" size={20} color="#fff" />
+</View>
 
         {/* UPCOMING CARE */}
         <View style={styles.sectionHeader}>
@@ -53,18 +84,18 @@ export default function HomeScreen() {
 
         {["Martin Peterson", "Dorothy Chambers", "Sarah Mitchell"].map(
           (name, i) => (
-            <View key={i} style={styles.careCard}>
-              <Text style={styles.time}>10:00 AM</Text>
+       <View key={i} style={styles.careCardNew}>
+  <View style={styles.timeBadge}>
+    <Text style={styles.timeText}>10:00</Text>
+  </View>
 
-              <View style={{ flex: 1 }}>
-                <Text style={styles.patientName}>{name}</Text>
-                <Text style={styles.patientSub}>Follow-up</Text>
-              </View>
+  <View style={{ flex: 1 }}>
+    <Text style={styles.patientName}>{name}</Text>
+    <Text style={styles.patientSub}>Follow-up Visit</Text>
+  </View>
 
-              <TouchableOpacity style={styles.detailsBtn}>
-                <Text style={styles.detailsText}>Details</Text>
-              </TouchableOpacity>
-            </View>
+  <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+</View>
           )
         )}
 
@@ -99,7 +130,7 @@ export default function HomeScreen() {
         ))}
 
       </ScrollView>
-    </SafeAreaView>
+   </View>
   );
 }
 const styles = StyleSheet.create({
@@ -109,7 +140,80 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 40,
   },
+greetingCard: {
+  backgroundColor: "#fff",
+  padding: 16,
+  borderRadius: 16,
+  marginBottom: 14,
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  elevation: 2,
+},
 
+greetingSmall: {
+  fontSize: 12,
+  color: "#64748B",
+},
+
+greetingName: {
+  fontSize: 20,
+  fontWeight: "700",
+  color: "#0F172A",
+},
+
+statCard: {
+  backgroundColor: "#fff",
+  width: "48%",
+  padding: 16,
+  borderRadius: 16,
+  elevation: 2,
+  gap: 6,
+},
+
+taskCardNew: {
+  backgroundColor: "#0F766E",
+  padding: 18,
+  borderRadius: 16,
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 14,
+},
+
+taskTitleNew: {
+  color: "#D1FAE5",
+  fontSize: 12,
+},
+
+taskCountNew: {
+  color: "#fff",
+  fontSize: 18,
+  fontWeight: "700",
+},
+
+careCardNew: {
+  flexDirection: "row",
+  backgroundColor: "#fff",
+  padding: 14,
+  borderRadius: 14,
+  alignItems: "center",
+  marginBottom: 10,
+  elevation: 1,
+},
+
+timeBadge: {
+  backgroundColor: "#E0F2FE",
+  padding: 8,
+  borderRadius: 10,
+  marginRight: 10,
+},
+
+timeText: {
+  fontSize: 11,
+  color: "#0284C7",
+  fontWeight: "600",
+},
   header: {
     marginBottom: 16,
   },
@@ -151,13 +255,6 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
-  statCard: {
-    backgroundColor: "#fff",
-    width: "48%",
-    padding: 16,
-    borderRadius: 14,
-    elevation: 2,
-  },
 
   statNumber: {
     fontSize: 18,
@@ -176,6 +273,36 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginBottom: 14,
   },
+topHeader: {
+  backgroundColor: "#FFFFFF",
+  paddingHorizontal: 16,
+  paddingTop: 40, // 🔥 IMPORTANT (status bar space)
+  paddingBottom: 12,
+  borderBottomWidth: 1,
+  borderBottomColor: "#E5E7EB",
+
+  shadowColor: "#000",
+  shadowOpacity: 0.05,
+  shadowRadius: 4,
+  elevation: 3,
+},
+
+logoContainer: {
+  flexDirection: "row",
+  alignItems: "center",
+},
+
+logo: {
+  width: 36,
+  height: 36,
+  marginRight: 10,
+},
+
+companyName: {
+  fontSize: 16,
+  fontWeight: "700",
+  color: "#0F172A",
+},
 
   taskTitle: {
     color: "#D1FAE5",
@@ -290,9 +417,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 });
-function StatCard({ number, label }: any) {
+function StatCard({ number, label, icon }: any) {
   return (
     <View style={styles.statCard}>
+      <Ionicons name={icon} size={20} color="#0F766E" />
       <Text style={styles.statNumber}>{number}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
