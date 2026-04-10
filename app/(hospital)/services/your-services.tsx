@@ -1,63 +1,139 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useContext } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useRouter, useFocusEffect } from 'expo-router';
-import { Colors, FontFamily, FontSize, Spacing, Radius, Shadow, ButtonSize } from '@/src/shared/constants/theme';
-import { DEPARTMENTS, Department } from '@/src/features/services/constants/departments';
-import { loadSelectedServices } from '@/src/features/services/services/storage';
-   
+  ActivityIndicator,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useRouter, useFocusEffect } from "expo-router";
+import {
+  Colors,
+  FontFamily,
+  FontSize,
+  Spacing,
+  Radius,
+  Shadow,
+  ButtonSize,
+} from "@/src/shared/constants/theme";
+import { Department } from "@/src/features/services/constants/departments";
+import { AuthContext } from "@/src/core/context/AuthContext";
+import api from "@/src/core/api/apiClient";
+
 export default function YourServicesScreen() {
   const router = useRouter();
+  const auth = useContext(AuthContext);
+  const vendorId = auth?.user?.vendorId;
   const [services, setServices] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // useFocusEffect(
+  //   useCallback(() => {
+  //     let active = true;
+  //     setLoading(true);
+  //     loadSelectedServices().then((ids) => {
+  //       if (!active) return;
+  //       if (ids.length === 0) {
+  //         // router.replace('/(hospital)/services/select');
+  //         router.replace('/services/select');
+  //         return;
+  //       }
+  //       const depts = ids
+  //         .map((id) => DEPARTMENTS.find((d) => d.id === id))
+  //         .filter((d): d is Department => !!d);
+  //       setServices(depts);
+  //       setLoading(false);
+  //     });
+  //     return () => {
+  //       active = false;
+  //     };
+  //   }, [])
+  // );
   useFocusEffect(
     useCallback(() => {
-      let active = true;
-      setLoading(true);
-      loadSelectedServices().then((ids) => {
-        if (!active) return;
-        if (ids.length === 0) {
-          // router.replace('/(hospital)/services/select');
-          router.replace('/services/select');
-          return;
-        }
-        const depts = ids
-          .map((id) => DEPARTMENTS.find((d) => d.id === id))
-          .filter((d): d is Department => !!d);
-        setServices(depts);
-        setLoading(false);
-      });
-      return () => {
-        active = false;
-      };
-    }, [])
+      if (vendorId) {
+        loadServices();
+      }
+    }, [vendorId]),
   );
 
-  if (loading) return null;
+  const loadServices = async () => {
+    try {
+      setLoading(true);
+
+      // 1️⃣ Get selected departments (IDs)
+      const hospitalRes = await api.get(
+        `/api/Hospital/GetHospitalById/${vendorId}`,
+      );
+
+      const selectedIds: number[] =
+        hospitalRes.data?.departments ||
+        hospitalRes.data?.dept_ids ||
+        [];
+
+      console.log('Hospital selectedIds:', selectedIds);
+
+      // 2️⃣ Get all departments
+      const deptRes = await api.get('/api/Hospital/GetDeprt_HOSP');
+      const allDepts = deptRes.data || [];
+      console.log('All Departments:', allDepts);
+
+      // 3️⃣ Map IDs → full department objects
+      const mapped = selectedIds
+        .map((id: any) =>
+          allDepts.find((d: any) => String(d.id) === String(id)),
+        )
+        .filter(Boolean)
+        .map((d: any) => ({
+          id: String(d.id),
+          name: d.dep_name,
+          specialty: d.specialty || '',
+          description: d.description || '',
+          icon: 'medical-services',
+        }));
+
+      setServices(mapped);
+    } catch (err) {
+      console.log('❌ Service load error', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={Colors.light.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (services.length === 0) {
+    router.replace('/(hospital)/services/select');
+    return null;
+  }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
-
+        showsVerticalScrollIndicator={false}
+      >
         {/* Header row */}
         <Text style={styles.overviewLabel}>OVERVIEW</Text>
         <View style={styles.titleRow}>
           <Text style={styles.title}>Your Services</Text>
           <TouchableOpacity
             style={styles.editBtn}
-            onPress={() => router.push('/(hospital)/services/select')}
-            activeOpacity={0.75}>
+            onPress={() => router.push("/(hospital)/services/select")}
+            activeOpacity={0.75}
+          >
             <MaterialIcons name="edit" size={14} color={Colors.light.primary} />
             <Text style={styles.editBtnText}>Edit</Text>
           </TouchableOpacity>
@@ -69,7 +145,11 @@ export default function YourServicesScreen() {
             <React.Fragment key={dept.id}>
               <View style={styles.serviceRow}>
                 <View style={styles.iconWrap}>
-                  <MaterialIcons name={dept.icon as any} size={22} color={Colors.light.primary} />
+                  <MaterialIcons
+                    name={dept.icon as any}
+                    size={22}
+                    color={Colors.light.primary}
+                  />
                 </View>
                 <View style={styles.serviceText}>
                   <Text style={styles.serviceName}>{dept.name}</Text>
@@ -96,14 +176,18 @@ export default function YourServicesScreen() {
             <MaterialIcons name="medical-services" size={24} color="#fff" />
           </View>
           <Text style={styles.generalCareTitle}>General Care</Text>
-          <Text style={styles.generalCareDesc}>Routine checkups and medical consultations.</Text>
+          <Text style={styles.generalCareDesc}>
+            Routine checkups and medical consultations.
+          </Text>
         </View>
 
         {/* Urgent consultation banner */}
         <View style={styles.urgentBanner}>
           <View style={styles.urgentText}>
             <Text style={styles.urgentTitle}>Need an urgent consultation?</Text>
-            <Text style={styles.urgentDesc}>Connect with our top specialists in minutes.</Text>
+            <Text style={styles.urgentDesc}>
+              Connect with our top specialists in minutes.
+            </Text>
           </View>
           <TouchableOpacity style={styles.bookNowBtn} activeOpacity={0.8}>
             <Text style={styles.bookNowText}>Book Now</Text>
@@ -135,9 +219,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: Spacing.lg,
   },
   title: {
@@ -146,8 +230,8 @@ const styles = StyleSheet.create({
     color: Colors.light.onSurface,
   },
   editBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     backgroundColor: Colors.light.surfaceContainerLowest,
     borderRadius: Radius.xl,
@@ -169,8 +253,8 @@ const styles = StyleSheet.create({
     ...Shadow.card,
   },
   serviceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: Spacing.md,
   },
   iconWrap: {
@@ -178,8 +262,8 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: Radius.md,
     backgroundColor: Colors.light.primaryFixed,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: Spacing.md,
     flexShrink: 0,
   },
@@ -200,7 +284,7 @@ const styles = StyleSheet.create({
   },
   arrowIcon: {
     marginLeft: Spacing.sm,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
     marginTop: 2,
   },
   divider: {
@@ -215,46 +299,46 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     marginBottom: Spacing.md,
     minHeight: 110,
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
     ...Shadow.card,
   },
   generalCarePlus: {
-    position: 'absolute',
+    position: "absolute",
     top: Spacing.md,
     right: Spacing.md,
     width: 32,
     height: 32,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   generalCareIcon: {
     width: 44,
     height: 44,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: Spacing.sm,
   },
   generalCareTitle: {
     fontFamily: FontFamily.headline,
     fontSize: FontSize.titleLarge,
-    color: '#fff',
+    color: "#fff",
     marginBottom: 2,
   },
   generalCareDesc: {
     fontFamily: FontFamily.body,
     fontSize: FontSize.bodySmall,
-    color: 'rgba(255,255,255,0.8)',
+    color: "rgba(255,255,255,0.8)",
   },
 
   urgentBanner: {
     backgroundColor: Colors.light.inverseSurface,
     borderRadius: Radius.xl,
     padding: Spacing.md,
-    flexDirection: 'column',
+    flexDirection: "column",
     gap: Spacing.md,
   },
   urgentText: {
@@ -269,10 +353,10 @@ const styles = StyleSheet.create({
   urgentDesc: {
     fontFamily: FontFamily.body,
     fontSize: FontSize.bodySmall,
-    color: 'rgba(238,241,246,0.8)',
+    color: "rgba(238,241,246,0.8)",
   },
   bookNowBtn: {
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
     borderWidth: 1.5,
     borderColor: Colors.light.inverseOnSurface,
     borderRadius: Radius.xl,
