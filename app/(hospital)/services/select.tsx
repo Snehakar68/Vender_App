@@ -1,110 +1,3 @@
-// import React, { useState, useEffect, useContext } from 'react';
-// import {
-//   View,
-//   Text,
-//   StyleSheet,
-//   FlatList,
-//   TouchableOpacity,
-//   ListRenderItemInfo,
-// } from 'react-native';
-// import { SafeAreaView } from 'react-native-safe-area-context';
-// import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-// import { useRouter } from 'expo-router';
-// import { Colors, FontFamily, FontSize, Spacing, Radius, Shadow, ButtonSize } from '@/src/shared/constants/theme';
-// import { DEPARTMENTS, Department } from '@/src/features/services/constants/departments';
-// import { loadSelectedServices, saveSelectedServices } from '@/src/features/services/services/storage';
-// import { AuthContext } from '@/src/core/context/AuthContext';
-
-// export default function SelectServicesScreen() {
-//     const router = useRouter();
-// const auth = useContext(AuthContext);
-// const vendorId = auth?.user?.vendorId;
-
-// const [selected, setSelected] = useState<Set<string>>(new Set());
-// const [departments, setDepartments] = useState<Department[]>([]);
-
-
-//   useEffect(() => {
-//     loadSelectedServices().then((ids) => {
-//       setSelected(new Set(ids));
-//     });
-//   }, []);
-
-//   function toggle(id: string) {
-//     setSelected((prev) => {
-//       const next = new Set(prev);
-//       next.has(id) ? next.delete(id) : next.add(id);
-//       return next;
-//     });
-//   }
-
-//   async function handleUpdate() {
-//     await saveSelectedServices([...selected]);
-//      router.replace('/(hospital)/services/your-services');
-//   }
-
-//   function renderItem({ item }: ListRenderItemInfo<Department>) {
-//     const isSelected = selected.has(item.id);
-//     return (
-//       <TouchableOpacity
-//         style={[styles.card, isSelected && styles.cardSelected]}
-//         onPress={() => toggle(item.id)}
-//         activeOpacity={0.75}>
-//         {/* Check indicator */}
-//         <View style={[styles.checkCircle, isSelected && styles.checkCircleSelected]}>
-//           {isSelected && <MaterialIcons name="check" size={14} color="#fff" />}
-//         </View>
-
-//         {/* Icon */}
-//         <View style={styles.iconWrap}>
-//           <MaterialIcons
-//             name={item.icon as any}
-//             size={22}
-//             color={isSelected ? Colors.light.primary : Colors.light.onSurfaceVariant}
-//           />
-//         </View>
-
-//         {/* Text */}
-//         <Text style={[styles.cardName, isSelected && styles.cardNameSelected]} numberOfLines={1}>
-//           {item.name}
-//         </Text>
-//         <Text style={styles.cardSpecialty} numberOfLines={1}>
-//           {item.specialty}
-//         </Text>
-//       </TouchableOpacity>
-//     );
-//   }
-
-//   return (
-//     <SafeAreaView style={styles.safeArea} edges={['top']}>
-//       {/* Header */}
-//       <View style={styles.header}>
-//         <Text style={styles.title}>Select Services</Text>
-//         <Text style={styles.subtitle}>
-//           Choose the departments you wish to subscribe to for homecare assistance.
-//         </Text>
-//       </View>
-
-//       <FlatList
-//         data={DEPARTMENTS}
-//         keyExtractor={(item) => item.id}
-//         renderItem={renderItem}
-//         numColumns={2}
-//         columnWrapperStyle={styles.row}
-//         contentContainerStyle={styles.listContent}
-//         showsVerticalScrollIndicator={false}
-//       />
-
-//       {/* Update button */}
-//       <View style={styles.btnContainer}>
-//         <TouchableOpacity style={styles.updateBtn} onPress={handleUpdate} activeOpacity={0.85}>
-//           <Text style={styles.updateBtnText}>Update Services</Text>
-//           <MaterialIcons name="arrow-forward" size={20} color="#fff" />
-//         </TouchableOpacity>
-//       </View>
-//     </SafeAreaView>
-//   );
-// }
 import React, { useState, useEffect, useContext } from 'react';
 import {
   View,
@@ -129,7 +22,28 @@ import {
 } from '@/src/shared/constants/theme';
 import { Department } from '@/src/features/services/constants/departments';
 import { AuthContext } from '@/src/core/context/AuthContext';
-import api from '@/src/core/api/apiClient'; // ✅ make sure api instance exists
+import api from '@/src/core/api/apiClient';
+
+// ── Icon helper (matches department name to icon) ─────────────────────────────
+const getDepartmentIcon = (name: string): string => {
+  const n = name?.toLowerCase() || '';
+  if (n.includes('cardio') || n.includes('heart')) return 'favorite';
+  if (n.includes('dent') || n.includes('oral')) return 'coronavirus';
+  if (n.includes('neuro') || n.includes('brain')) return 'device-hub';
+  if (n.includes('pediatr') || n.includes('child')) return 'child-friendly';
+  if (n.includes('ent') || n.includes('ear') || n.includes('throat')) return 'hearing';
+  if (n.includes('radio') || n.includes('xray') || n.includes('scan')) return 'image-search';
+  if (n.includes('ortho') || n.includes('bone') || n.includes('joint')) return 'accessible';
+  if (n.includes('physio') || n.includes('rehab')) return 'self-improvement';
+  if (n.includes('psych') || n.includes('mental')) return 'psychology-alt';
+  if (n.includes('gynec') || n.includes('women')) return 'pregnant-woman';
+  if (n.includes('ophthal') || n.includes('eye')) return 'visibility';
+  if (n.includes('dermat') || n.includes('skin')) return 'face';
+  if (n.includes('oncol') || n.includes('cancer')) return 'biotech';
+  if (n.includes('urol') || n.includes('kidney')) return 'water-drop';
+  if (n.includes('general') || n.includes('medicine')) return 'local-hospital';
+  return 'medical-services';
+};
 
 export default function SelectServicesScreen() {
   const router = useRouter();
@@ -139,8 +53,9 @@ export default function SelectServicesScreen() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+  const [error, setError] = useState('');
 
-  // 🔥 Load data from API
   useEffect(() => {
     if (vendorId) {
       loadDepartments();
@@ -151,34 +66,25 @@ export default function SelectServicesScreen() {
     try {
       setLoading(true);
 
-      // ✅ 1. Get all departments
+      // 1️⃣ Get all departments
       const deptRes = await api.get('/api/Hospital/GetDeprt_HOSP');
       const allDepts = deptRes.data || [];
-      console.log('All Departments:', allDepts);
 
       const formattedDepartments = allDepts.map((d: any) => ({
-        id: String(d.id),
+        id: String(d.dep_id || d.id),   // ✅ use dep_id like web version
         name: d.dep_name,
         specialty: d.specialty || '',
-        icon: 'medical-services', // default icon (no UI change)
+        description: d.description || '',
+        icon: getDepartmentIcon(d.dep_name),
       }));
 
       setDepartments(formattedDepartments);
 
-      // ✅ 2. Get selected departments of hospital
-      const hospitalRes = await api.get(
-        `/api/Hospital/GetHospitalById/${vendorId}`
-      );
-
-      console.log('Hospital Data:', hospitalRes.data);
-
-      const selectedIds =
-        hospitalRes.data?.departments ||
-        hospitalRes.data?.dept_ids ||
-        [];
+      // 2️⃣ Get already selected departments
+      const hospitalRes = await api.get(`/api/Hospital/GetHospitalById/${vendorId}`);
+      const selectedIds = hospitalRes.data?.departments || hospitalRes.data?.dept_ids || [];
 
       setSelected(new Set(selectedIds.map(String)));
-
     } catch (err) {
       console.log('❌ Load departments error', err);
     } finally {
@@ -186,8 +92,8 @@ export default function SelectServicesScreen() {
     }
   };
 
-  // 🔁 Toggle selection
   function toggle(id: string) {
+    setError('');
     setSelected((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
@@ -195,12 +101,48 @@ export default function SelectServicesScreen() {
     });
   }
 
-  // Navigate back to YourServicesScreen (no update API available yet)
-  function handleUpdate() {
-    router.replace('/(hospital)/services/your-services');
+  // ── Update API — mirrors web version exactly ──────────────────────────────
+  async function handleUpdate() {
+    if (!vendorId) return;
+
+    if (selected.size === 0) {
+      setError('Please select at least one department.');
+      return;
+    }
+
+    try {
+      setUpdating(true);
+      setError('');
+
+      // Web sends plain array of IDs: JSON.stringify(depIds)
+      const depIds = Array.from(selected).map(Number);
+
+      const res = await api.post(
+        `/api/Hospital/UpdateHospitalServices/${vendorId}`,
+        depIds,  // ✅ plain array, not wrapped in object
+      );
+
+      console.log('Update result:', res.data);
+
+      router.replace('/(hospital)/services/your-services');
+    } catch (err) {
+      console.log('❌ Update services error', err);
+      setError('Failed to update services. Please try again.');
+    } finally {
+      setUpdating(false);
+    }
   }
 
-  // 🎨 Render Item
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={Colors.light.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   function renderItem({ item }: ListRenderItemInfo<Department>) {
     const isSelected = selected.has(item.id);
 
@@ -210,34 +152,20 @@ export default function SelectServicesScreen() {
         onPress={() => toggle(item.id)}
         activeOpacity={0.75}
       >
-        <View
-          style={[
-            styles.checkCircle,
-            isSelected && styles.checkCircleSelected,
-          ]}
-        >
-          {isSelected && (
-            <MaterialIcons name="check" size={14} color="#fff" />
-          )}
+        <View style={[styles.checkCircle, isSelected && styles.checkCircleSelected]}>
+          {isSelected && <MaterialIcons name="check" size={14} color="#fff" />}
         </View>
 
         <View style={styles.iconWrap}>
           <MaterialIcons
             name={item.icon as any}
             size={22}
-            color={
-              isSelected
-                ? Colors.light.primary
-                : Colors.light.onSurfaceVariant
-            }
+            color={isSelected ? Colors.light.primary : Colors.light.onSurfaceVariant}
           />
         </View>
 
         <Text
-          style={[
-            styles.cardName,
-            isSelected && styles.cardNameSelected,
-          ]}
+          style={[styles.cardName, isSelected && styles.cardNameSelected]}
           numberOfLines={1}
         >
           {item.name}
@@ -250,20 +178,8 @@ export default function SelectServicesScreen() {
     );
   }
 
-  // ⏳ Loader
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color={Colors.light.primary} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Select Services</Text>
         <Text style={styles.subtitle}>
@@ -271,8 +187,15 @@ export default function SelectServicesScreen() {
         </Text>
       </View>
 
+      {error ? (
+        <View style={styles.errorBox}>
+          <MaterialIcons name="error-outline" size={16} color={Colors.light.error} />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : null}
+
       <FlatList
-        data={departments} 
+        data={departments}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         numColumns={2}
@@ -281,25 +204,29 @@ export default function SelectServicesScreen() {
         showsVerticalScrollIndicator={false}
       />
 
-      {/* Update button */}
       <View style={styles.btnContainer}>
         <TouchableOpacity
-          style={styles.updateBtn}
+          style={[styles.updateBtn, updating && { opacity: 0.7 }]}
           onPress={handleUpdate}
           activeOpacity={0.85}
+          disabled={updating}
         >
-          <Text style={styles.updateBtnText}>Update Services</Text>
-          <MaterialIcons name="arrow-forward" size={20} color="#fff" />
+          {updating ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <Text style={styles.updateBtnText}>Update Services</Text>
+              <MaterialIcons name="arrow-forward" size={20} color="#fff" />
+            </>
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 }
+
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.light.surface,
-  },
+  safeArea: { flex: 1, backgroundColor: Colors.light.surface },
 
   header: {
     paddingHorizontal: Spacing.md,
@@ -319,14 +246,25 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  listContent: {
-    paddingHorizontal: Spacing.md,
-    paddingBottom: 100,
-  },
-  row: {
-    gap: Spacing.sm,
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginHorizontal: Spacing.md,
     marginBottom: Spacing.sm,
+    backgroundColor: Colors.light.errorContainer,
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
   },
+  errorText: {
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.bodySmall,
+    color: Colors.light.error,
+    flex: 1,
+  },
+
+  listContent: { paddingHorizontal: Spacing.md, paddingBottom: 100 },
+  row: { gap: Spacing.sm, marginBottom: Spacing.sm },
 
   card: {
     flex: 1,
@@ -338,9 +276,7 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
     ...Shadow.card,
   },
-  cardSelected: {
-    borderColor: Colors.light.primary,
-  },
+  cardSelected: { borderColor: Colors.light.primary },
 
   checkCircle: {
     position: 'absolute',

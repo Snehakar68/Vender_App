@@ -24,20 +24,15 @@ import {
   Shadow,
   ButtonSize,
 } from "@/src/shared/constants/theme";
+import {
+  validateBankDetails,
+  ValidationErrors,
+  BankFormState,
+} from "@/src/shared/utils/validation";
 
 const ACCOUNT_TYPES = ["Savings Account", "Current Account", "Salary Account"];
 
-type FormState = {
-  bankName: string;
-  branch: string;
-  ifsc: string;
-  holderName: string;
-  accountNumber: string;
-  confirmAccount: string;
-  accountType: string;
-};
-
-const EMPTY_FORM: FormState = {
+const EMPTY_FORM: BankFormState = {
   bankName: "",
   branch: "",
   ifsc: "",
@@ -52,12 +47,17 @@ export default function BankDetailsScreen() {
   const auth = useContext(AuthContext);
   const vendorId = auth?.user?.vendorId;
 
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [form, setForm] = useState<BankFormState>(EMPTY_FORM);
+  const [originalForm, setOriginalForm] = useState<BankFormState>(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showTypeMenu, setShowTypeMenu] = useState(false);
-  const [statusMsg, setStatusMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [errors, setErrors] = useState<ValidationErrors<BankFormState>>({});
+  const [statusMsg, setStatusMsg] = useState<{
+    text: string;
+    ok: boolean;
+  } | null>(null);
 
   useEffect(() => {
     if (vendorId) loadBankDetails();
@@ -67,15 +67,17 @@ export default function BankDetailsScreen() {
     try {
       const res = await api.get(`/api/Bank/GetBankDetailsById/${vendorId}`);
       const d = res.data;
-      setForm({
-        bankName: d.bank_name ?? "",
-        branch: d.branch ?? "",
-        ifsc: d.ifsc ?? "",
-        holderName: d.account_holder ?? "",
+      const loaded: BankFormState = {
+        bankName: d.BankName ?? d.bank_name ?? "",
+        branch: d.BranchName ?? d.branch ?? "",
+        ifsc: d.IFSCCode ?? d.ifsc ?? "",
+        holderName: d.Account_HolderName ?? d.account_holder ?? "",
         accountNumber: d.account_number ?? "",
         confirmAccount: d.account_number ?? "",
         accountType: d.account_type ?? "Savings Account",
-      });
+      };
+      setForm(loaded);
+      setOriginalForm(loaded);
     } catch (e) {
       console.log("Bank details fetch failed:", e);
     } finally {
@@ -83,8 +85,9 @@ export default function BankDetailsScreen() {
     }
   };
 
-  function update(key: keyof FormState, val: string) {
+  function update(key: keyof BankFormState, val: string) {
     setForm((prev) => ({ ...prev, [key]: val }));
+    if (errors[key]) setErrors((prev) => ({ ...prev, [key]: undefined }));
   }
 
   function showStatus(text: string, ok: boolean) {
@@ -92,30 +95,67 @@ export default function BankDetailsScreen() {
     setTimeout(() => setStatusMsg(null), 3000);
   }
 
-  const handleEditSave = async () => {
-    if (!isEditing) {
-      setIsEditing(true);
-      return;
-    }
+  function handleEdit() {
+    setOriginalForm(form);
+    setErrors({});
+    setIsEditing(true);
+  }
+
+  function handleCancel() {
+    setForm(originalForm);
+    setErrors({});
+    setIsEditing(false);
+    setShowTypeMenu(false);
+  }
+
+  const handleUpdate = async () => {
+    const validationErrors = validateBankDetails(form);
+
     if (form.accountNumber !== form.confirmAccount) {
-      showStatus("Account numbers do not match.", false);
+      validationErrors.confirmAccount = "Account numbers do not match";
+    }
+
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
       return;
     }
+
     setSaving(true);
+
     try {
-      await api.put("/api/Bank/UpdateBankDetails", {
-        vendorId,
-        bank_name: form.bankName,
-        branch: form.branch,
-        ifsc: form.ifsc,
-        account_holder: form.holderName,
+      const payload = {
+        vendor_id: vendorId,
+        BankName: form.bankName,
+        BranchName: form.branch,
+        IFSCCode: form.ifsc,
+        Account_HolderName: form.holderName,
         account_number: form.accountNumber,
         account_type: form.accountType,
-      });
+      };
+
+      const response = await fetch(
+        "https://coreapi-service-111763741518.asia-south1.run.app/api/Bank/UpdateBankDetails",
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${auth?.user?.token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        },
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.message || "Update failed");
+      }
+
+      setOriginalForm(form);
       setIsEditing(false);
       showStatus("Bank details saved successfully.", true);
-    } catch (e) {
-      console.log("Bank save failed:", e);
+    } catch (e: any) {
+      console.log("❌ ERROR:", e);
       showStatus("Failed to save. Please try again.", false);
     } finally {
       setSaving(false);
@@ -139,21 +179,32 @@ export default function BankDetailsScreen() {
           style={styles.backBtn}
           activeOpacity={0.7}
         >
-          <MaterialIcons name="arrow-back" size={24} color={Colors.light.onSurface} />
+          <MaterialIcons
+            name="arrow-back"
+            size={24}
+            color={Colors.light.onSurface}
+          />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Bank Details</Text>
-        <TouchableOpacity
-          onPress={handleEditSave}
-          disabled={saving}
-          style={styles.editBtn}
-          activeOpacity={0.7}
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color={Colors.light.primary} />
-          ) : (
-            <Text style={styles.editBtnText}>{isEditing ? "Save" : "Edit"}</Text>
-          )}
-        </TouchableOpacity>
+        {isEditing ? (
+          <TouchableOpacity
+            onPress={handleCancel}
+            style={styles.editBtn}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.editBtnText, { color: Colors.light.error }]}>
+              Cancel
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={handleEdit}
+            style={styles.editBtn}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.editBtnText}>Edit</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <KeyboardAvoidingView
@@ -169,7 +220,11 @@ export default function BankDetailsScreen() {
           {/* Info card */}
           <View style={styles.infoCard}>
             <View style={styles.infoIconWrap}>
-              <MaterialIcons name="account-balance" size={24} color={Colors.light.onPrimary} />
+              <MaterialIcons
+                name="account-balance"
+                size={24}
+                color={Colors.light.onPrimary}
+              />
             </View>
             <View style={styles.infoText}>
               <Text style={styles.infoTitle}>Payout Account</Text>
@@ -186,6 +241,8 @@ export default function BankDetailsScreen() {
             placeholder="e.g. State Bank of India"
             onChangeText={(v) => update("bankName", v)}
             editable={isEditing}
+            required
+            error={errors.bankName}
           />
           <Field
             label="Branch"
@@ -194,6 +251,8 @@ export default function BankDetailsScreen() {
             placeholder="e.g. Connaught Place"
             onChangeText={(v) => update("branch", v)}
             editable={isEditing}
+            required
+            error={errors.branch}
           />
           <Field
             label="IFSC Code"
@@ -203,6 +262,8 @@ export default function BankDetailsScreen() {
             onChangeText={(v) => update("ifsc", v.toUpperCase())}
             autoCapitalize="characters"
             editable={isEditing}
+            required
+            error={errors.ifsc}
           />
           <Field
             label="Account Holder's Name"
@@ -211,6 +272,8 @@ export default function BankDetailsScreen() {
             placeholder="As per bank passbook"
             onChangeText={(v) => update("holderName", v)}
             editable={isEditing}
+            required
+            error={errors.holderName}
           />
           <Field
             label="Account Number"
@@ -220,6 +283,8 @@ export default function BankDetailsScreen() {
             onChangeText={(v) => update("accountNumber", v)}
             keyboardType="numeric"
             editable={isEditing}
+            required
+            error={errors.accountNumber}
           />
           {isEditing && (
             <Field
@@ -230,86 +295,119 @@ export default function BankDetailsScreen() {
               onChangeText={(v) => update("confirmAccount", v)}
               keyboardType="numeric"
               editable
+              required
+              error={errors.confirmAccount}
             />
           )}
 
           {/* Account Type */}
-          <Text style={styles.fieldLabel}>Account Type</Text>
-          {isEditing ? (
-            <>
-              <TouchableOpacity
-                style={styles.dropdownBtn}
-                onPress={() => setShowTypeMenu((p) => !p)}
-                activeOpacity={0.75}
-              >
+          <View style={styles.fieldWrap}>
+            <View style={styles.labelRow}>
+              <Text style={styles.fieldLabel}>Account Type</Text>
+              <Text style={styles.requiredStar}>*</Text>
+            </View>
+            {isEditing ? (
+              <>
+                <TouchableOpacity
+                  style={[
+                    styles.dropdownBtn,
+                    errors.accountType ? styles.inputError : null,
+                  ]}
+                  onPress={() => setShowTypeMenu((p) => !p)}
+                  activeOpacity={0.75}
+                >
+                  <MaterialIcons
+                    name="account-tree"
+                    size={18}
+                    color={Colors.light.onSurfaceVariant}
+                    style={styles.fieldIcon}
+                  />
+                  <Text style={styles.dropdownValue}>{form.accountType}</Text>
+                  <MaterialIcons
+                    name={
+                      showTypeMenu ? "keyboard-arrow-up" : "keyboard-arrow-down"
+                    }
+                    size={22}
+                    color={Colors.light.outline}
+                  />
+                </TouchableOpacity>
+                {errors.accountType && (
+                  <Text style={styles.errorText}>{errors.accountType}</Text>
+                )}
+                {showTypeMenu && (
+                  <View style={styles.dropdownMenu}>
+                    {ACCOUNT_TYPES.map((type) => (
+                      <TouchableOpacity
+                        key={type}
+                        style={[
+                          styles.dropdownItem,
+                          form.accountType === type && styles.dropdownItemActive,
+                        ]}
+                        onPress={() => {
+                          update("accountType", type);
+                          setShowTypeMenu(false);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            styles.dropdownItemText,
+                            form.accountType === type &&
+                              styles.dropdownItemTextActive,
+                          ]}
+                        >
+                          {type}
+                        </Text>
+                        {form.accountType === type && (
+                          <MaterialIcons
+                            name="check"
+                            size={16}
+                            color={Colors.light.primary}
+                          />
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </>
+            ) : (
+              <View style={styles.readOnlyRow}>
                 <MaterialIcons
                   name="account-tree"
                   size={18}
                   color={Colors.light.onSurfaceVariant}
                   style={styles.fieldIcon}
                 />
-                <Text style={styles.dropdownValue}>{form.accountType}</Text>
-                <MaterialIcons
-                  name={showTypeMenu ? "keyboard-arrow-up" : "keyboard-arrow-down"}
-                  size={22}
-                  color={Colors.light.outline}
-                />
-              </TouchableOpacity>
-              {showTypeMenu && (
-                <View style={styles.dropdownMenu}>
-                  {ACCOUNT_TYPES.map((type) => (
-                    <TouchableOpacity
-                      key={type}
-                      style={[
-                        styles.dropdownItem,
-                        form.accountType === type && styles.dropdownItemActive,
-                      ]}
-                      onPress={() => {
-                        update("accountType", type);
-                        setShowTypeMenu(false);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        style={[
-                          styles.dropdownItemText,
-                          form.accountType === type && styles.dropdownItemTextActive,
-                        ]}
-                      >
-                        {type}
-                      </Text>
-                      {form.accountType === type && (
-                        <MaterialIcons name="check" size={16} color={Colors.light.primary} />
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </>
-          ) : (
-            <View style={styles.readOnlyRow}>
-              <MaterialIcons
-                name="account-tree"
-                size={18}
-                color={Colors.light.onSurfaceVariant}
-                style={styles.fieldIcon}
-              />
-              <Text style={styles.readOnlyValue}>{form.accountType || "—"}</Text>
-            </View>
-          )}
+                <Text style={styles.readOnlyValue}>
+                  {form.accountType || "—"}
+                </Text>
+              </View>
+            )}
+          </View>
 
           {/* Status banner */}
           {statusMsg && (
-            <View style={[styles.banner, statusMsg.ok ? styles.bannerOk : styles.bannerErr]}>
+            <View
+              style={[
+                styles.banner,
+                statusMsg.ok ? styles.bannerOk : styles.bannerErr,
+              ]}
+            >
               <MaterialIcons
                 name={statusMsg.ok ? "check-circle" : "error-outline"}
                 size={16}
-                color={statusMsg.ok ? Colors.light.tertiary : Colors.light.error}
+                color={
+                  statusMsg.ok ? Colors.light.tertiary : Colors.light.error
+                }
               />
               <Text
                 style={[
                   styles.bannerText,
-                  { color: statusMsg.ok ? Colors.light.tertiary : Colors.light.error },
+                  {
+                    color: statusMsg.ok
+                      ? Colors.light.tertiary
+                      : Colors.light.error,
+                  },
                 ]}
               >
                 {statusMsg.text}
@@ -320,12 +418,32 @@ export default function BankDetailsScreen() {
           {/* Security note */}
           <View style={styles.securityNote}>
             <MaterialIcons name="lock" size={12} color={Colors.light.outline} />
-            <Text style={styles.securityText}>END-TO-END ENCRYPTED SECURE VAULT</Text>
+            <Text style={styles.securityText}>
+              END-TO-END ENCRYPTED SECURE VAULT
+            </Text>
           </View>
 
-          <View style={{ height: Spacing.lg }} />
+          <View style={{ height: isEditing ? 80 : Spacing.lg }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Sticky Update button */}
+      {isEditing && (
+        <View style={styles.updateBar}>
+          <TouchableOpacity
+            style={styles.updateBtn}
+            onPress={handleUpdate}
+            disabled={saving}
+            activeOpacity={0.85}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.updateBtnText}>Update</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -341,6 +459,8 @@ function Field({
   keyboardType,
   autoCapitalize,
   editable = true,
+  required = false,
+  error,
 }: {
   label: string;
   icon: string;
@@ -350,12 +470,17 @@ function Field({
   keyboardType?: any;
   autoCapitalize?: any;
   editable?: boolean;
+  required?: boolean;
+  error?: string;
 }) {
   return (
     <View style={styles.fieldWrap}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+      <View style={styles.labelRow}>
+        <Text style={styles.fieldLabel}>{label}</Text>
+        {required && <Text style={styles.requiredStar}>*</Text>}
+      </View>
       {editable ? (
-        <View style={styles.inputRow}>
+        <View style={[styles.inputRow, error ? styles.inputError : null]}>
           <MaterialIcons
             name={icon as any}
             size={18}
@@ -383,6 +508,7 @@ function Field({
           <Text style={styles.readOnlyValue}>{value || "—"}</Text>
         </View>
       )}
+      {error && <Text style={styles.errorText}>{error}</Text>}
     </View>
   );
 }
@@ -416,7 +542,7 @@ const styles = StyleSheet.create({
     color: Colors.light.onSurface,
   },
   editBtn: {
-    minWidth: 40,
+    minWidth: 60,
     height: 40,
     alignItems: "center",
     justifyContent: "center",
@@ -465,11 +591,27 @@ const styles = StyleSheet.create({
   },
 
   fieldWrap: { marginBottom: Spacing.md },
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    marginBottom: Spacing.xs,
+  },
   fieldLabel: {
     fontFamily: FontFamily.bodyMedium,
     fontSize: FontSize.labelLarge,
     color: Colors.light.onSurface,
-    marginBottom: Spacing.xs,
+  },
+  requiredStar: {
+    color: Colors.light.error,
+    fontSize: FontSize.labelMedium,
+    fontFamily: FontFamily.bodyMedium,
+  },
+  errorText: {
+    color: Colors.light.error,
+    fontSize: FontSize.labelSmall,
+    fontFamily: FontFamily.body,
+    marginTop: 4,
   },
   inputRow: {
     flexDirection: "row",
@@ -477,6 +619,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.surfaceContainerLow,
     borderRadius: Radius.lg,
     paddingHorizontal: Spacing.md,
+  },
+  inputError: {
+    borderWidth: 1,
+    borderColor: Colors.light.error,
   },
   fieldIcon: { marginRight: Spacing.sm },
   input: {
@@ -505,7 +651,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     paddingHorizontal: Spacing.md,
     paddingVertical: 14,
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
   dropdownValue: {
     flex: 1,
@@ -566,5 +712,25 @@ const styles = StyleSheet.create({
     fontSize: FontSize.labelSmall,
     color: Colors.light.outline,
     letterSpacing: 0.8,
+  },
+
+  updateBar: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    backgroundColor: Colors.light.surfaceContainerLowest,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.outlineVariant,
+  },
+  updateBtn: {
+    backgroundColor: "#16A34A",
+    borderRadius: Radius.lg,
+    height: ButtonSize.minHeight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  updateBtnText: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: FontSize.bodyMedium,
+    color: "#fff",
   },
 });

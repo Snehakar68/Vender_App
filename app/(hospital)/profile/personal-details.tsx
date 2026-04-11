@@ -9,13 +9,19 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Modal,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 import GoogleMapPicker from "@/src/shared/components/GoogleMapPicker";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AuthContext } from "@/src/core/context/AuthContext";
 import api from "@/src/core/api/apiClient";
+
+export const HOSPITAL_PROFILE_KEY = "@jhilmil/hospital_profile";
 import {
   Colors,
   FontFamily,
@@ -23,25 +29,17 @@ import {
   Spacing,
   Radius,
   Shadow,
+  ButtonSize,
 } from "@/src/shared/constants/theme";
+import {
+  validatePersonalDetails,
+  ValidationErrors,
+  PersonalFormState,
+} from "@/src/shared/utils/validation";
 
-type FormState = {
-  hospitalName: string;
-  addressLine1: string;
-  addressLine2: string;
-  city: string;
-  state: string;
-  pinCode: string;
-  email: string;
-  mobile: string;
-  altMobile: string;
-  landline: string;
-  aboutUs: string;
-  latitude: string;
-  longitude: string;
-};
+const MIN_IMAGES = 3;
 
-const EMPTY_FORM: FormState = {
+const EMPTY_FORM: PersonalFormState = {
   hospitalName: "",
   addressLine1: "",
   addressLine2: "",
@@ -62,10 +60,15 @@ export default function PersonalDetailsScreen() {
   const auth = useContext(AuthContext);
   const vendorId = auth?.user?.vendorId;
 
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [form, setForm] = useState<PersonalFormState>(EMPTY_FORM);
+  const [originalForm, setOriginalForm] = useState<PersonalFormState>(EMPTY_FORM);
+  const [images, setImages] = useState<string[]>([]);
+  const [originalImages, setOriginalImages] = useState<string[]>([]);
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [statusMsg, setStatusMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
   useEffect(() => {
@@ -74,24 +77,43 @@ export default function PersonalDetailsScreen() {
 
   const loadProfile = async () => {
     try {
-      const res = await api.get(`/api/Hospital/GetHospitalById/${vendorId}`);
-      const data = res.data;
-      console.log("Profile data:", data);
-      setForm({
-        hospitalName: data.full_name ?? "",
-        addressLine1: data.adrs_1 ?? "",
-        addressLine2: data.adrs_2 ?? "",
-        city: data.city ?? "",
-        state: data.state ?? "",
-        pinCode: data.pin_code ?? "",
-        email: data.email ?? "",
-        mobile: data.mobile ?? "",
-        altMobile: data.mobile_1 ?? "",
-        landline: data.landline ?? "",
-        aboutUs: data.about ?? "",
-        latitude: data.latitude ?? "",
-        longitude: data.longitude ?? "",
-      });
+      const res = await api.get(`/api/Hospital/GetHosPersonnelInfoById/${vendorId}`);
+      const apiData = res.data?.data?.hospital;
+      console.log("Profile data:", res.data);
+      const loaded: PersonalFormState = {
+        hospitalName: apiData?.full_name ?? "",
+        addressLine1: apiData?.adrs_1 ?? "",
+        addressLine2: apiData?.adrs_2 ?? "",
+        city: apiData?.city ?? "",
+        state: apiData?.state ?? "",
+        pinCode: apiData?.pin_code ?? "",
+        email: apiData?.email ?? "",
+        mobile: apiData?.mobile ?? "",
+        altMobile: apiData?.mobile_1 ?? "",
+        landline: apiData?.ph_L ?? "",
+        aboutUs: apiData?.summary ?? "",
+        latitude: apiData?.latitude ?? "",
+        longitude: apiData?.longitude ?? "",
+      };
+      setForm(loaded);
+      setOriginalForm(loaded);
+
+      // Load images from API — photos array contains raw base64 strings
+      const rawPhotos: string[] = Array.isArray(res.data?.data?.photos)
+        ? res.data.data.photos
+        : [];
+      const apiImages = rawPhotos
+        .filter(Boolean)
+        .map((img) => `data:image/png;base64,${img}`);
+      setImages(apiImages);
+      setOriginalImages(apiImages);
+
+      // Cache name + first photo as profile image for home & profile tab
+      const profileImage: string | null = apiImages[0] ?? null;
+      await AsyncStorage.setItem(
+        HOSPITAL_PROFILE_KEY,
+        JSON.stringify({ hospitalName: loaded.hospitalName, profileImage })
+      );
     } catch (e) {
       console.log("Profile fetch failed:", e);
     } finally {
@@ -99,8 +121,9 @@ export default function PersonalDetailsScreen() {
     }
   };
 
-  function update(key: keyof FormState, val: string) {
+  function update(key: keyof PersonalFormState, val: string) {
     setForm((prev) => ({ ...prev, [key]: val }));
+    if (errors[key]) setErrors((prev) => { const n = { ...prev }; delete n[key]; return n; });
   }
 
   function showStatus(text: string, ok: boolean) {
@@ -108,33 +131,104 @@ export default function PersonalDetailsScreen() {
     setTimeout(() => setStatusMsg(null), 3000);
   }
 
-  const handleEditSave = async () => {
-    if (!isEditing) {
-      setIsEditing(true);
+  function handleEdit() {
+    setOriginalForm(form);
+    setOriginalImages(images);
+    setErrors({});
+    setIsEditing(true);
+  }
+
+  function handleCancel() {
+    setForm(originalForm);
+    setImages(originalImages);
+    setErrors({});
+    setIsEditing(false);
+  }
+
+  const pickImage = async (index: number) => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      showStatus("Permission to access gallery is required.", false);
       return;
     }
-    setSaving(true);
-    try {
-      await api.put("/api/Hospital/UpdateHosPersonnelInfo", {
-        vendorId,
-        full_name: form.hospitalName,
-        adrs_1: form.addressLine1,
-        adrs_2: form.addressLine2,
-        city: form.city,
-        state: form.state,
-        pin_code: form.pinCode,
-        email: form.email,
-        mobile: form.mobile,
-        mobile_1: form.altMobile,
-        landline: form.landline,
-        about: form.aboutUs,
-        latitude: form.latitude,
-        longitude: form.longitude,
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      const uri = result.assets[0].uri;
+      setImages((prev) => {
+        const updated = [...prev];
+        updated[index] = uri;
+        return updated;
       });
+      if (errors.images) setErrors((prev) => { const n = { ...prev }; delete n.images; return n; });
+    }
+  };
+
+  const handleUpdate = async () => {
+    const validationErrors = validatePersonalDetails(form, images.length);
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors as Record<string, string>);
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const fd = new FormData();
+
+      fd.append("vendor_id", vendorId as string);
+      fd.append("full_name", form.hospitalName);
+      fd.append("email", form.email);
+      fd.append("mobile", form.mobile);
+      fd.append("mobile_1", form.altMobile || "");
+      fd.append("Ph_L", form.landline || "");
+      fd.append("adrs_1", form.addressLine1);
+      fd.append("adrs_2", form.addressLine2 || "");
+      // ⚠️ CASE SENSITIVE (DO NOT CHANGE)
+      fd.append("City", form.city);
+      fd.append("State", form.state);
+      fd.append("pin_code", form.pinCode);
+      fd.append("Summary", form.aboutUs || "test");
+      fd.append("Latitude", String(Number(form.latitude)));
+      fd.append("Longitude", String(Number(form.longitude)));
+
+      // Append new local images only
+      images.forEach((uri, i) => {
+        if (uri.startsWith("file://") || uri.startsWith("content://")) {
+          const filename = uri.split("/").pop() ?? `image_${i}.jpg`;
+          (fd as any).append("images", { uri, name: filename, type: "image/jpeg" });
+        }
+      });
+
+      const response = await fetch(
+        "https://coreapi-service-111763741518.asia-south1.run.app/api/Hospital/UpdateHosPersonnelInfo",
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${auth?.user?.token}`,
+            // ❌ DO NOT ADD Content-Type for multipart/form-data
+          },
+          body: fd,
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.message || "Update failed");
+      }
+
+      setOriginalForm(form);
+      setOriginalImages(images);
       setIsEditing(false);
       showStatus("Details saved successfully.", true);
-    } catch (e) {
-      console.log("Save failed:", e);
+    } catch (e: any) {
+      console.log("❌ ERROR:", e);
       showStatus("Failed to save. Please try again.", false);
     } finally {
       setSaving(false);
@@ -149,6 +243,9 @@ export default function PersonalDetailsScreen() {
     );
   }
 
+  // Ensure at least MIN_IMAGES slots are shown
+  const imageSlots = Math.max(images.length, MIN_IMAGES);
+
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
       {/* Header */}
@@ -161,18 +258,23 @@ export default function PersonalDetailsScreen() {
           <MaterialIcons name="arrow-back" size={24} color={Colors.light.onSurface} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Personal Details</Text>
-        <TouchableOpacity
-          onPress={handleEditSave}
-          disabled={saving}
-          style={styles.editBtn}
-          activeOpacity={0.7}
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color={Colors.light.primary} />
-          ) : (
-            <Text style={styles.editBtnText}>{isEditing ? "Save" : "Edit"}</Text>
-          )}
-        </TouchableOpacity>
+        {isEditing ? (
+          <TouchableOpacity
+            onPress={handleCancel}
+            style={styles.editBtn}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.editBtnText, { color: Colors.light.error }]}>Cancel</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={handleEdit}
+            style={styles.editBtn}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.editBtnText}>Edit</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <KeyboardAvoidingView
@@ -193,12 +295,16 @@ export default function PersonalDetailsScreen() {
               value={form.hospitalName}
               onChangeText={(v) => update("hospitalName", v)}
               editable={isEditing}
+              required
+              error={errors.hospitalName}
             />
             <InputField
               label="Address Line 1"
               value={form.addressLine1}
               onChangeText={(v) => update("addressLine1", v)}
               editable={isEditing}
+              required
+              error={errors.addressLine1}
             />
             <InputField
               label="Address Line 2"
@@ -213,6 +319,8 @@ export default function PersonalDetailsScreen() {
                   value={form.city}
                   onChangeText={(v) => update("city", v)}
                   editable={isEditing}
+                  required
+                  error={errors.city}
                 />
               </View>
               <View style={{ flex: 1 }}>
@@ -221,6 +329,8 @@ export default function PersonalDetailsScreen() {
                   value={form.state}
                   onChangeText={(v) => update("state", v)}
                   editable={isEditing}
+                  required
+                  error={errors.state}
                 />
               </View>
             </View>
@@ -230,30 +340,93 @@ export default function PersonalDetailsScreen() {
               onChangeText={(v) => update("pinCode", v)}
               keyboardType="numeric"
               editable={isEditing}
+              required
+              error={errors.pinCode}
             />
+          </View>
+
+          {/* HOSPITAL IMAGES */}
+          <Text style={styles.sectionLabel}>HOSPITAL IMAGES</Text>
+          <View style={styles.section}>
+            <View style={styles.imageGrid}>
+              {Array.from({ length: imageSlots }).map((_, i) => {
+                const uri = images[i];
+                return (
+                  <TouchableOpacity
+                    key={i}
+                    style={styles.imageSlot}
+                    onPress={() => {
+                      if (uri) {
+                        setViewingImage(uri);
+                      } else if (isEditing) {
+                        pickImage(i);
+                      }
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    {uri ? (
+                      <>
+                        <Image source={{ uri }} style={styles.imageThumb} />
+                        {isEditing && (
+                          <View style={styles.imageEditOverlay}>
+                            <MaterialIcons name="edit" size={16} color="#fff" />
+                          </View>
+                        )}
+                      </>
+                    ) : (
+                      <View style={styles.imagePlaceholder}>
+                        <MaterialIcons
+                          name={isEditing ? "add-a-photo" : "image"}
+                          size={24}
+                          color={Colors.light.outline}
+                        />
+                        {isEditing && (
+                          <Text style={styles.imagePlaceholderText}>Add Photo</Text>
+                        )}
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+              {isEditing && (
+                <TouchableOpacity
+                  style={[styles.imageSlot, styles.imageAddSlot]}
+                  onPress={() => pickImage(images.length)}
+                  activeOpacity={0.8}
+                >
+                  <MaterialIcons name="add" size={28} color={Colors.light.primary} />
+                </TouchableOpacity>
+              )}
+            </View>
+            {errors.images && (
+              <Text style={styles.imageError}>{errors.images}</Text>
+            )}
+            <Text style={styles.imageHint}>
+              {isEditing
+                ? `Minimum ${MIN_IMAGES} images required`
+                : `${images.length} image${images.length !== 1 ? "s" : ""}`}
+            </Text>
           </View>
 
           {/* LOCATION */}
           <Text style={styles.sectionLabel}>LOCATION & MAP</Text>
           <View style={styles.section}>
-            {isEditing && (
-              <View style={styles.mapContainer}>
-                <GoogleMapPicker
-                  city={form.city}
-                  state={form.state}
-                  pin={form.pinCode}
-                  address1={form.addressLine1}
-                  onLocationSelect={(lat, lng, pin) => {
-                    setForm((prev) => ({
-                      ...prev,
-                      latitude: String(lat),
-                      longitude: String(lng),
-                      ...(pin ? { pinCode: pin } : {}),
-                    }));
-                  }}
-                />
-              </View>
-            )}
+            <View style={styles.mapContainer}>
+              <GoogleMapPicker
+                city={form.city}
+                state={form.state}
+                pin={form.pinCode}
+                address1={form.addressLine1}
+                onLocationSelect={(lat, lng, pin) => {
+                  setForm((prev) => ({
+                    ...prev,
+                    latitude: String(lat),
+                    longitude: String(lng),
+                    ...(pin ? { pinCode: pin } : {}),
+                  }));
+                }}
+              />
+            </View>
             <View style={styles.row2}>
               <View style={{ flex: 1 }}>
                 <InputField
@@ -262,6 +435,8 @@ export default function PersonalDetailsScreen() {
                   onChangeText={(v) => update("latitude", v)}
                   keyboardType="numeric"
                   editable={isEditing}
+                  required
+                  error={errors.latitude}
                 />
               </View>
               <View style={{ flex: 1 }}>
@@ -271,6 +446,8 @@ export default function PersonalDetailsScreen() {
                   onChangeText={(v) => update("longitude", v)}
                   keyboardType="numeric"
                   editable={isEditing}
+                  required
+                  error={errors.longitude}
                 />
               </View>
             </View>
@@ -286,6 +463,8 @@ export default function PersonalDetailsScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               editable={isEditing}
+              required
+              error={errors.email}
             />
             <InputField
               label="Mobile Number"
@@ -293,6 +472,8 @@ export default function PersonalDetailsScreen() {
               onChangeText={(v) => update("mobile", v)}
               keyboardType="phone-pad"
               editable={isEditing}
+              required
+              error={errors.mobile}
             />
             <InputField
               label="Alternate Mobile"
@@ -313,10 +494,18 @@ export default function PersonalDetailsScreen() {
           {/* ABOUT US */}
           <Text style={styles.sectionLabel}>ABOUT US</Text>
           <View style={styles.section}>
+            <View style={fieldStyles.labelRow}>
+              <Text style={fieldStyles.label}>About Us</Text>
+              <Text style={fieldStyles.requiredStar}>*</Text>
+            </View>
             {isEditing ? (
               <>
                 <TextInput
-                  style={[styles.aboutInput, { fontFamily: FontFamily.body }]}
+                  style={[
+                    styles.aboutInput,
+                    { fontFamily: FontFamily.body },
+                    errors.aboutUs ? styles.inputError : null,
+                  ]}
                   value={form.aboutUs}
                   onChangeText={(v) => {
                     if (v.length <= 1000) update("aboutUs", v);
@@ -327,6 +516,9 @@ export default function PersonalDetailsScreen() {
                   placeholderTextColor={Colors.light.outline}
                 />
                 <Text style={styles.charCount}>{form.aboutUs.length} / 1000</Text>
+                {errors.aboutUs && (
+                  <Text style={fieldStyles.errorText}>{errors.aboutUs}</Text>
+                )}
               </>
             ) : (
               <Text style={styles.aboutReadOnly}>
@@ -343,15 +535,66 @@ export default function PersonalDetailsScreen() {
                 size={16}
                 color={statusMsg.ok ? Colors.light.tertiary : Colors.light.error}
               />
-              <Text style={[styles.bannerText, { color: statusMsg.ok ? Colors.light.tertiary : Colors.light.error }]}>
+              <Text
+                style={[
+                  styles.bannerText,
+                  { color: statusMsg.ok ? Colors.light.tertiary : Colors.light.error },
+                ]}
+              >
                 {statusMsg.text}
               </Text>
             </View>
           )}
 
-          <View style={{ height: Spacing.xl }} />
+          <View style={{ height: isEditing ? 80 : Spacing.xl }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Sticky Update button */}
+      {isEditing && (
+        <View style={styles.updateBar}>
+          <TouchableOpacity
+            style={styles.updateBtn}
+            onPress={handleUpdate}
+            disabled={saving}
+            activeOpacity={0.85}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.updateBtnText}>Update</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Fullscreen image viewer */}
+      <Modal
+        visible={!!viewingImage}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewingImage(null)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setViewingImage(null)}
+        >
+          {viewingImage && (
+            <Image
+              source={{ uri: viewingImage }}
+              style={styles.fullImage}
+              resizeMode="contain"
+            />
+          )}
+          <TouchableOpacity
+            style={styles.modalClose}
+            onPress={() => setViewingImage(null)}
+          >
+            <MaterialIcons name="close" size={24} color="#fff" />
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -366,6 +609,8 @@ function InputField({
   keyboardType,
   autoCapitalize,
   editable = true,
+  required = false,
+  error,
 }: {
   label: string;
   value: string;
@@ -374,13 +619,18 @@ function InputField({
   keyboardType?: any;
   autoCapitalize?: any;
   editable?: boolean;
+  required?: boolean;
+  error?: string;
 }) {
   return (
     <View style={fieldStyles.wrap}>
-      <Text style={fieldStyles.label}>{label}</Text>
+      <View style={fieldStyles.labelRow}>
+        <Text style={fieldStyles.label}>{label}</Text>
+        {required && <Text style={fieldStyles.requiredStar}>*</Text>}
+      </View>
       {editable ? (
         <TextInput
-          style={fieldStyles.input}
+          style={[fieldStyles.input, error ? fieldStyles.inputError : null]}
           value={value}
           placeholder={placeholder ?? label}
           placeholderTextColor={Colors.light.outline}
@@ -391,17 +641,34 @@ function InputField({
       ) : (
         <Text style={fieldStyles.valueText}>{value || "—"}</Text>
       )}
+      {error && <Text style={fieldStyles.errorText}>{error}</Text>}
     </View>
   );
 }
 
 const fieldStyles = StyleSheet.create({
   wrap: { marginBottom: Spacing.sm },
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    marginBottom: 4,
+  },
   label: {
     fontFamily: FontFamily.bodyMedium,
     fontSize: FontSize.labelMedium,
     color: Colors.light.onSurfaceVariant,
-    marginBottom: 4,
+  },
+  requiredStar: {
+    color: Colors.light.error,
+    fontSize: FontSize.labelMedium,
+    fontFamily: FontFamily.bodyMedium,
+  },
+  errorText: {
+    color: Colors.light.error,
+    fontSize: FontSize.labelSmall,
+    fontFamily: FontFamily.body,
+    marginTop: 4,
   },
   input: {
     backgroundColor: Colors.light.surfaceContainerLow,
@@ -411,6 +678,10 @@ const fieldStyles = StyleSheet.create({
     fontFamily: FontFamily.body,
     fontSize: FontSize.bodyMedium,
     color: Colors.light.onSurface,
+  },
+  inputError: {
+    borderWidth: 1,
+    borderColor: Colors.light.error,
   },
   valueText: {
     fontFamily: FontFamily.body,
@@ -449,7 +720,7 @@ const styles = StyleSheet.create({
     color: Colors.light.onSurface,
   },
   editBtn: {
-    minWidth: 40,
+    minWidth: 60,
     height: 40,
     alignItems: "center",
     justifyContent: "center",
@@ -481,6 +752,69 @@ const styles = StyleSheet.create({
   },
   row2: { flexDirection: "row", gap: Spacing.sm },
 
+  // Images
+  imageGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginBottom: Spacing.xs,
+  },
+  imageSlot: {
+    width: 96,
+    height: 96,
+    borderRadius: Radius.lg,
+    overflow: "hidden",
+    backgroundColor: Colors.light.surfaceContainerLow,
+  },
+  imageThumb: {
+    width: "100%",
+    height: "100%",
+  },
+  imageEditOverlay: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    padding: 4,
+    borderTopLeftRadius: Radius.sm,
+  },
+  imagePlaceholder: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: Colors.light.outlineVariant,
+    borderRadius: Radius.lg,
+    borderStyle: "dashed",
+    gap: 4,
+  },
+  imagePlaceholderText: {
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.labelSmall,
+    color: Colors.light.outline,
+  },
+  imageAddSlot: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: Colors.light.primary,
+    borderStyle: "dashed",
+    backgroundColor: Colors.light.primaryFixed + "30",
+  },
+  imageError: {
+    color: Colors.light.error,
+    fontSize: FontSize.labelSmall,
+    fontFamily: FontFamily.body,
+    marginTop: 4,
+  },
+  imageHint: {
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.labelSmall,
+    color: Colors.light.outline,
+    marginTop: 4,
+  },
+
+  // Map
   mapContainer: {
     height: 220,
     borderRadius: Radius.lg,
@@ -488,6 +822,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
 
+  // About
   aboutInput: {
     backgroundColor: Colors.light.surfaceContainerLow,
     borderRadius: Radius.lg,
@@ -496,6 +831,10 @@ const styles = StyleSheet.create({
     color: Colors.light.onSurface,
     minHeight: 120,
     textAlignVertical: "top",
+  },
+  inputError: {
+    borderWidth: 1,
+    borderColor: Colors.light.error,
   },
   charCount: {
     fontFamily: FontFamily.body,
@@ -511,6 +850,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
 
+  // Banner
   banner: {
     flexDirection: "row",
     alignItems: "center",
@@ -525,5 +865,49 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bodyMedium,
     fontSize: FontSize.bodySmall,
     flex: 1,
+  },
+
+  // Update bar
+  updateBar: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    backgroundColor: Colors.light.surfaceContainerLowest,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.outlineVariant,
+  },
+  updateBtn: {
+    backgroundColor: "#16A34A",
+    borderRadius: Radius.lg,
+    height: ButtonSize.minHeight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  updateBtnText: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: FontSize.bodyMedium,
+    color: "#fff",
+  },
+
+  // Fullscreen image modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  fullImage: {
+    width: "100%",
+    height: "80%",
+  },
+  modalClose: {
+    position: "absolute",
+    top: 48,
+    right: 16,
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
