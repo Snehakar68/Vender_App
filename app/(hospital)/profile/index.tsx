@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useContext, useEffect, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -19,20 +21,71 @@ import {
   Shadow,
   ButtonSize,
 } from "@/src/shared/constants/theme";
-import { SERVICES_KEY } from "@/src/features/services/services/storage";
-import { useContext } from "react";
 import { AuthContext } from "@/src/core/context/AuthContext";
+import api from "@/src/core/api/apiClient";
+import { HOSPITAL_PROFILE_KEY } from "./personal-details";
 
-const AUTH_KEY = "@jhilmil/auth_token";
+function getInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "H";
+  if (words.length === 1) return words[0].charAt(0).toUpperCase();
+  return (words[0].charAt(0) + words[1].charAt(0)).toUpperCase();
+}
 
 export default function ProfileScreen() {
   const router = useRouter();
   const auth = useContext(AuthContext);
+  const vendorId = auth?.user?.vendorId;
+
+  const [hospitalName, setHospitalName] = useState("");
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+
+  useEffect(() => {
+    loadProfile();
+  }, [vendorId]);
+
+  const loadProfile = async () => {
+    // 1. Try AsyncStorage cache first
+    try {
+      const cached = await AsyncStorage.getItem(HOSPITAL_PROFILE_KEY);
+      if (cached) {
+        const { hospitalName: name, profileImage: img } = JSON.parse(cached);
+        if (name) {
+          setHospitalName(name);
+          setProfileImage(img ?? null);
+          setProfileLoading(false);
+          return;
+        }
+      }
+    } catch (_) {}
+
+    // 2. Fallback to API
+    if (!vendorId) { setProfileLoading(false); return; }
+    try {
+      const res = await api.get(`/api/Hospital/GetHosPersonnelInfoById/${vendorId}`);
+      const apiData = res.data?.data;
+      const name: string = apiData?.hospital?.full_name ?? "";
+      const rawPhotos: string[] = Array.isArray(apiData?.photos) ? apiData.photos : [];
+      const img: string | null = rawPhotos.length > 0
+        ? `data:image/png;base64,${rawPhotos[0]}`
+        : null;
+      setHospitalName(name);
+      setProfileImage(img);
+      await AsyncStorage.setItem(
+        HOSPITAL_PROFILE_KEY,
+        JSON.stringify({ hospitalName: name, profileImage: img })
+      );
+    } catch (_) {}
+    setProfileLoading(false);
+  };
+
   async function handleSignOut() {
-    // await AsyncStorage.multiRemove([SERVICES_KEY, AUTH_KEY]);
-    // router.replace("/(auth)/login");
-     await auth?.logout();
+    await auth?.logout();
   }
+
+  const displayName = hospitalName || "Hospital";
+  const initials = getInitials(displayName);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
@@ -46,14 +99,25 @@ export default function ProfileScreen() {
           {/* Avatar */}
           <View style={styles.avatarWrap}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarInitials}>LC</Text>
-            </View>
-            <View style={styles.avatarEditBtn}>
-              <MaterialIcons name="edit" size={12} color="#fff" />
+              {profileLoading ? (
+                <ActivityIndicator size="small" color={Colors.light.primary} />
+              ) : profileImage ? (
+                <Image
+                  source={{ uri: profileImage }}
+                  style={styles.avatarImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Text style={styles.avatarInitials}>{initials}</Text>
+              )}
             </View>
           </View>
 
-          <Text style={styles.name}>LifeCare Specialty</Text>
+          {profileLoading ? (
+            <View style={styles.namePlaceholder} />
+          ) : (
+            <Text style={styles.name}>{displayName}</Text>
+          )}
           <Text style={styles.designation}>Partner Hospital</Text>
 
           <TouchableOpacity
@@ -145,7 +209,6 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
 
-  // Header card
   headerCard: {
     backgroundColor: Colors.light.surfaceContainerLowest,
     borderRadius: Radius.xl,
@@ -154,7 +217,6 @@ const styles = StyleSheet.create({
     ...Shadow.card,
   },
   avatarWrap: {
-    position: "relative",
     marginBottom: Spacing.md,
   },
   avatar: {
@@ -166,24 +228,23 @@ const styles = StyleSheet.create({
     borderColor: Colors.light.primary,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
   },
   avatarInitials: {
     fontFamily: FontFamily.headline,
     fontSize: FontSize.headlineMedium,
     color: Colors.light.primary,
   },
-  avatarEditBtn: {
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    width: 26,
-    height: 26,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.light.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 2,
-    borderColor: Colors.light.surfaceContainerLowest,
+  namePlaceholder: {
+    height: 24,
+    width: 160,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.light.surfaceContainerLow,
+    marginBottom: 4,
   },
   name: {
     fontFamily: FontFamily.headline,
@@ -214,7 +275,6 @@ const styles = StyleSheet.create({
     color: Colors.light.primary,
   },
 
-  // Menu card
   menuCard: {
     backgroundColor: Colors.light.surfaceContainerLowest,
     borderRadius: Radius.xl,
@@ -248,7 +308,6 @@ const styles = StyleSheet.create({
     marginLeft: 72,
   },
 
-  // Sign Out
   signOutBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -264,7 +323,6 @@ const styles = StyleSheet.create({
     color: Colors.light.error,
   },
 
-  // Version
   version: {
     fontFamily: FontFamily.body,
     fontSize: FontSize.labelSmall,
