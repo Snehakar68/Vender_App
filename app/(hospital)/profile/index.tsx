@@ -190,7 +190,7 @@ export default function ProfileScreen() {
         </TouchableOpacity>
 
         {/* Version */}
-        <Text style={styles.version}>App Version 2.4.1 (Build 108)</Text>
+        {/* <Text style={styles.version}>App Version 2.4.1 (Build 108)</Text> */}
       </ScrollView>
     </SafeAreaView>
   );
