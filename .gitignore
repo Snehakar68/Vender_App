@@ -45,3 +45,5 @@ app-example
 # Ignore editor folders
 .vscode/
 .claude/
+
+.idea/

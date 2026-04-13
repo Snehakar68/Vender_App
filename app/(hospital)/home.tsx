@@ -22,6 +22,7 @@ import {
   FontSize,
 } from "@/src/shared/constants/theme";
 import { HOSPITAL_PROFILE_KEY } from "./profile/personal-details";
+import { Image } from "expo-image";
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -331,7 +332,10 @@ export default function HospitalHome() {
         <View style={styles.header}>
           <View style={styles.headerBrand}>
             <View style={styles.headerIcon}>
-              <MaterialIcons name="local-hospital" size={18} color="#fff" />
+              <Image
+                source={require("@/src/assets/images/logo.png")}
+                style={{ width: 40, height: 40 }}
+              />
             </View>
             <Text style={styles.headerTitle}>Jhilmil Homecare</Text>
           </View>
@@ -467,72 +471,81 @@ export default function HospitalHome() {
 
           {/* Column headers */}
           {pendingNurses.length > 0 && (
-           <> <View style={styles.tableHeader}>
-              <Text style={[styles.col, styles.colName, styles.colHead]}>
-                Name
-              </Text>
-              <Text style={[styles.col, styles.colCity, styles.colHead]}>
-                City
-              </Text>
-              <Text style={[styles.col, styles.colState, styles.colHead]}>
-                State
-              </Text>
-              <Text style={[styles.col, styles.colActions, styles.colHead]}>
-                Actions
-              </Text>
-            </View>
-             <ScrollView nestedScrollEnabled style={styles.tableScroll}>
-            {pendingNurses.map((nurse) => (
-              <View key={nurse.nurse_id} style={styles.tableRow}>
-                <Text style={[styles.col, styles.colName]} numberOfLines={1}>
-                  {nurse.nurse_detail?.full_name ?? "—"}
+            <>
+              {" "}
+              <View style={styles.tableHeader}>
+                <Text style={[styles.col, styles.colName, styles.colHead]}>
+                  Name
                 </Text>
-                <Text style={[styles.col, styles.colCity]} numberOfLines={1}>
-                  {nurse.nurse_detail?.city ?? "—"}
+                <Text style={[styles.col, styles.colCity, styles.colHead]}>
+                  City
                 </Text>
-                <Text style={[styles.col, styles.colState]} numberOfLines={1}>
-                  {nurse.nurse_detail?.state ?? "—"}
+                <Text style={[styles.col, styles.colState, styles.colHead]}>
+                  State
                 </Text>
-                <View style={[styles.colActions, styles.actionRow]}>
-                  {/* View */}
-                  <TouchableOpacity
-                    style={styles.iconBtn}
-                    onPress={() =>
-                      router.push({
-                        pathname: "/(hospital)/nurse-details/[id]",
-                        params: { id: nurse.nurse_id },
-                      })
-                    }
-                  >
-                    <MaterialIcons
-                      name="visibility"
-                      size={16}
-                      color={Colors.light.primary}
-                    />
-                  </TouchableOpacity>
-                  {/* Edit — TODO: add edit route */}
-                  <TouchableOpacity style={styles.iconBtn}>
-                    <MaterialIcons
-                      name="edit"
-                      size={16}
-                      color={Colors.light.onSurfaceVariant}
-                    />
-                  </TouchableOpacity>
-                  {/* Approve */}
-                  <TouchableOpacity
-                    style={[styles.iconBtn, styles.approveBtn]}
-                    onPress={() => approveNurse(nurse.nurse_id)}
-                  >
-                    <MaterialIcons name="check" size={16} color="#fff" />
-                  </TouchableOpacity>
-                </View>
+                <Text style={[styles.col, styles.colActions, styles.colHead]}>
+                  Actions
+                </Text>
               </View>
-            ))}
-          </ScrollView>
-          </>
+              <ScrollView nestedScrollEnabled style={styles.tableScroll}>
+                {pendingNurses.map((nurse) => (
+                  <View key={nurse.nurse_id} style={styles.tableRow}>
+                    <Text
+                      style={[styles.col, styles.colName]}
+                      numberOfLines={1}
+                    >
+                      {nurse.nurse_detail?.full_name ?? "—"}
+                    </Text>
+                    <Text
+                      style={[styles.col, styles.colCity]}
+                      numberOfLines={1}
+                    >
+                      {nurse.nurse_detail?.city ?? "—"}
+                    </Text>
+                    <Text
+                      style={[styles.col, styles.colState]}
+                      numberOfLines={1}
+                    >
+                      {nurse.nurse_detail?.state ?? "—"}
+                    </Text>
+                    <View style={[styles.colActions, styles.actionRow]}>
+                      {/* View */}
+                      <TouchableOpacity
+                        style={styles.iconBtn}
+                        onPress={() =>
+                          router.push({
+                            pathname: "/(hospital)/nurse-details/[id]",
+                            params: { id: nurse.nurse_id },
+                          })
+                        }
+                      >
+                        <MaterialIcons
+                          name="visibility"
+                          size={16}
+                          color={Colors.light.primary}
+                        />
+                      </TouchableOpacity>
+                      {/* Edit — TODO: add edit route */}
+                      <TouchableOpacity style={styles.iconBtn}>
+                        <MaterialIcons
+                          name="edit"
+                          size={16}
+                          color={Colors.light.onSurfaceVariant}
+                        />
+                      </TouchableOpacity>
+                      {/* Approve */}
+                      <TouchableOpacity
+                        style={[styles.iconBtn, styles.approveBtn]}
+                        onPress={() => approveNurse(nurse.nurse_id)}
+                      >
+                        <MaterialIcons name="check" size={16} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            </>
           )}
-
-         
         </View>
 
         {/* ── Staff Bar Chart ── */}
@@ -611,7 +624,8 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontFamily: FontFamily.headlineSemiBold,
     fontSize: FontSize.titleSmall,
-    color: Colors.light.primary,
+    color: Colors.light.onSurface,
+    fontWeight:"600"
   },
   avatar: {
     width: 36,
@@ -629,7 +643,8 @@ const styles = StyleSheet.create({
 
   // Welcome Card
   welcomeCard: {
-    backgroundColor: Colors.light.primary,
+    // backgroundColor: Colors.light.primary,
+    backgroundColor:"#008080",
     borderRadius: Radius.xl,
     padding: Spacing.lg,
     overflow: "hidden",
