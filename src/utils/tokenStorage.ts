@@ -11,7 +11,6 @@ const EMAIL = "email";
 const PHONE = "phone";
 const NAME = "name";
 
-// ✅ SAVE EVERYTHING
 export const setAuthData = async ({
   token,
   refreshToken,
@@ -21,7 +20,6 @@ export const setAuthData = async ({
   phone,
   name,
 }: any) => {
-  // 🔐 Secure
   if (token) {
     await SecureStore.setItemAsync(ACCESS_TOKEN, token);
   }
@@ -30,7 +28,6 @@ export const setAuthData = async ({
     await SecureStore.setItemAsync(REFRESH_TOKEN, refreshToken);
   }
 
-  // 📦 AsyncStorage
   await AsyncStorage.multiSet([
     [ROLE, role || ""],
     [VENDOR_ID, vendorId || ""],
@@ -40,7 +37,6 @@ export const setAuthData = async ({
   ]);
 };
 
-// ✅ GETTERS
 export const getAccessToken = () =>
   SecureStore.getItemAsync(ACCESS_TOKEN);
 
@@ -65,7 +61,6 @@ export const getUserData = async () => {
   };
 };
 
-// ✅ CLEAR
 export const clearAuthData = async () => {
   await SecureStore.deleteItemAsync(ACCESS_TOKEN);
   await SecureStore.deleteItemAsync(REFRESH_TOKEN);
@@ -92,5 +87,20 @@ export const isTokenExpired = (token: string) => {
     return payload.exp < Date.now() / 1000;
   } catch {
     return true;
+  }
+};
+export const setTokens = async ({
+  token,
+  refreshToken,
+}: {
+  token: string;
+  refreshToken: string;
+}) => {
+  if (token) {
+    await SecureStore.setItemAsync(ACCESS_TOKEN, token);
+  }
+
+  if (refreshToken) {
+    await SecureStore.setItemAsync(REFRESH_TOKEN, refreshToken);
   }
 };

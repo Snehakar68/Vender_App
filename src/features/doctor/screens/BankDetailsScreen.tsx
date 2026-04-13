@@ -12,7 +12,8 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { BackHandler } from "react-native";
 import { useCallback } from "react";
 import { useState, useEffect } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useContext } from "react";
+import { AuthContext } from "@/src/core/context/AuthContext";
 import { Alert, ActivityIndicator } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { Modal } from "react-native";
@@ -30,14 +31,27 @@ export default function BankDetailsScreen() {
     ac_type: "",
   });
 
-  const [errors, setErrors] = useState({});
+  type ErrorType = {
+    bankName?: string;
+    branch?: string;
+    ifsc?: string;
+    accountName?: string;
+    accountNumber?: string;
+    confirmAccountNumber?: string;
+    ac_type?: string;
+  };
+
+  const [errors, setErrors] = useState<ErrorType>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [edit, setEdit] = useState(false);
   const [successModal, setSuccessModal] = useState(false);
+  const auth = useContext(AuthContext);
+    const vendorId = auth?.user?.vendorId;
+  const token = auth?.user?.token;
 
   const validate = () => {
-    const err: any = {};
+    const err: ErrorType = {};
 
     if (!form.bankName.trim()) err.bankName = "Bank Name required";
     if (!form.branch.trim()) err.branch = "Branch required";
@@ -68,7 +82,7 @@ export default function BankDetailsScreen() {
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
-        router.replace("/(doctor)/profile"); // 🔥 change if needed
+        router.replace("/(doctor)/profile");
         return true;
       };
 
@@ -81,7 +95,7 @@ export default function BankDetailsScreen() {
     }, [])
   );
 
-  const handleChange = (key: string, value: string) => {
+  const handleChange = (key: keyof typeof form, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
 
     if (errors[key]) {
@@ -94,16 +108,22 @@ export default function BankDetailsScreen() {
     if (successModal) {
       const timer = setTimeout(() => {
         setSuccessModal(false);
-      }, 2000); // ⏱ 2 sec
+      }, 2000);
 
       return () => clearTimeout(timer);
     }
   }, [successModal]);
 
+ const handleEdit = () => {
+  if (submitting || loading || successModal) return;
+
+  setEdit(prev => !prev);
+};
+
   useEffect(() => {
     const fetchBankDetails = async () => {
+
       try {
-        const vendorId = await AsyncStorage.getItem("vendorId");
 
         const res = await fetch(
           `https://coreapi-service-111763741518.asia-south1.run.app/api/Bank/GetBankDetailsById/${vendorId}`
@@ -139,8 +159,6 @@ export default function BankDetailsScreen() {
     try {
       setSubmitting(true);
 
-      const vendorId = await AsyncStorage.getItem("vendorId");
-      const token = await AsyncStorage.getItem("accessToken");
 
       const payload = {
         vendor_id: vendorId,
@@ -176,27 +194,36 @@ export default function BankDetailsScreen() {
       setSubmitting(false);
     }
   };
+  if (loading) {
+    return (
+      <View style={{ flex: 1 }}>
+
+        <View style={styles.loader}>
+          <ActivityIndicator size="large" color="#0F766E" />
+          <Text style={styles.loaderText}>Loading bank details...</Text>
+        </View>
+      </View>
+    );
+  }
   return (
     <View style={{ flex: 1 }}>
 
-      {/* ✅ FIXED HEADER */}
       <View style={styles.headerWrapper}>
         <AppHeader
           title="Bank Details"
           subtitle="Manage your bank information"
           icon="card-outline"
           actionText={edit ? "Cancel" : "Edit"}
-          onActionPress={() => setEdit(!edit)}
+          onActionPress={handleEdit}
+          disabled={submitting || loading || successModal}
         />
       </View>
 
-      {/* ✅ SCROLLABLE CONTENT */}
       <ScrollView
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
 
-        {/* CARD */}
         <View style={styles.card}>
           <Input
             label="Bank Name *"
@@ -214,19 +241,19 @@ export default function BankDetailsScreen() {
             error={errors.branch}
           />
 
-    <Input
-  label="IFSC Code *"
-  value={form.ifsc}
-  editable={edit}
-  onChangeText={(t) =>
-    handleChange(
-      "ifsc",
-      t.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 11)
-    )
-  }
-  error={errors.ifsc}
-  maxLength={11}   // ✅ IMPORTANT
-/>
+          <Input
+            label="IFSC Code *"
+            value={form.ifsc}
+            editable={edit}
+            onChangeText={(t) =>
+              handleChange(
+                "ifsc",
+                t.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 11)
+              )
+            }
+            error={errors.ifsc}
+            maxLength={11}
+          />
           <Input
             label="Account Holder Name *"
             value={form.accountName}
@@ -245,7 +272,7 @@ export default function BankDetailsScreen() {
               handleChange("accountNumber", t.replace(/\D/g, ""))
             }
             error={errors.accountNumber}
-            secure={!edit} // 👈 mask in view mode
+            secure={!edit}
           />
 
           <Input
@@ -289,9 +316,12 @@ export default function BankDetailsScreen() {
           </View>
         </View>
 
-        {/* SAVE */}
         {edit && (
-          <TouchableOpacity style={styles.saveBtn} onPress={handleSubmit}>
+          <TouchableOpacity
+            style={styles.saveBtn}
+            onPress={handleSubmit}
+            disabled={submitting}
+          >
             {submitting ? (
               <ActivityIndicator color="#fff" />
             ) : (
@@ -338,7 +368,7 @@ const styles = StyleSheet.create({
   headerWrapper: {
     backgroundColor: "#fff",
 
-    paddingTop: StatusBar.currentHeight || 0, // ✅ THIS FIXES IT
+    paddingTop: StatusBar.currentHeight || 0,
 
     borderBottomWidth: 0.5,
     borderColor: "#E2E8F0",
@@ -351,7 +381,18 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
   },
+  loader: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+  },
 
+  loaderText: {
+    marginTop: 10,
+    fontSize: 13,
+    color: "#64748B",
+  },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -458,6 +499,16 @@ const modalStyles = StyleSheet.create({
     fontWeight: "600",
   },
 });
+type InputProps = {
+  label: string;
+  value: string;
+  onChangeText?: (text: string) => void;
+  error?: string;
+  editable?: boolean;
+  secure?: boolean;
+  maxLength?: number;
+};
+
 function Input({
   label,
   value,
@@ -466,7 +517,7 @@ function Input({
   editable = true,
   secure = false,
   maxLength,
-}: any) {
+}: InputProps) {
   return (
     <View style={{ marginBottom: 14 }}>
       <Text style={styles.label}>{label}</Text>
@@ -480,7 +531,7 @@ function Input({
         editable={editable}
         secureTextEntry={secure}
         onChangeText={onChangeText}
-        maxLength={maxLength} // ✅ THIS LINE
+        maxLength={maxLength}
       />
 
       {error && (

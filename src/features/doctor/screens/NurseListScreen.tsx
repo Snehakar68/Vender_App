@@ -8,13 +8,13 @@ import {
   StatusBar,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { SafeAreaView } from "react-native-safe-area-context";
 import AppHeader from "@/src/shared/components/AppHeader";
 import { Modal } from "react-native";
 import { useState } from "react";
 import api from "@/src/core/api/apiClient";
 import { useEffect } from "react";
 import { useContext } from "react";
+import { Animated } from "react-native";
 import { AuthContext } from "@/src/core/context/AuthContext";
 import { useRouter } from "expo-router";
 
@@ -43,9 +43,9 @@ type DropdownNurse = {
 export default function NurseListScreen() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-const [nurses, setNurses] = useState<Nurse[]>([]);
-const [departments, setDepartments] = useState<Department[]>([]);
-const [allNurses, setAllNurses] = useState<DropdownNurse[]>([]);
+  const [nurses, setNurses] = useState<Nurse[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [allNurses, setAllNurses] = useState<DropdownNurse[]>([]);
   const [selectedNurse, setSelectedNurse] = useState<any>(null);
   const [errors, setErrors] = useState<any>({});
   const [adding, setAdding] = useState(false);
@@ -55,6 +55,8 @@ const [allNurses, setAllNurses] = useState<DropdownNurse[]>([]);
   const [deleteSuccess, setDeleteSuccess] = useState(false);
   const [approvingId, setApprovingId] = useState<number | null>(null);
   const [justApproved, setJustApproved] = useState<number | null>(null);
+  const [highlightedNurse, setHighlightedNurse] = useState<number | null>(null);
+  const fadeAnim = useState(new Animated.Value(0))[0];
   const auth = useContext(AuthContext);
   const vendorId = auth?.user?.vendorId;
   const router = useRouter();
@@ -73,7 +75,7 @@ const [allNurses, setAllNurses] = useState<DropdownNurse[]>([]);
       const res = await api.get("/api/Nurse/GetNurseDepartments");
       setDepartments(res.data || []);
     } catch (e) {
-      console.log("❌ Department fetch failed");
+      console.log(" Department fetch failed");
     }
   };
   const getDepartmentName = (id: number) => {
@@ -102,7 +104,7 @@ const [allNurses, setAllNurses] = useState<DropdownNurse[]>([]);
 
       setAllNurses(filtered);
     } catch (e) {
-      console.log("❌ Available nurse fetch failed");
+      console.log(" Available nurse fetch failed");
     }
   };
 
@@ -122,7 +124,6 @@ const [allNurses, setAllNurses] = useState<DropdownNurse[]>([]);
         nurse_id: selectedNurse.id,
       });
 
-      // ✅ Success
       setOpen(false);
       setSelectedNurse(null);
 
@@ -145,7 +146,6 @@ const [allNurses, setAllNurses] = useState<DropdownNurse[]>([]);
         `/api/Nurse/Delete_Nurse_Linking?vendor_id=${deleteTarget.id}&hosp_Id=${vendorId}`
       );
 
-      // ✅ remove from UI instantly
       setNurses((prev: any) =>
         prev.filter((n: any) => n.id !== deleteTarget.id)
       );
@@ -171,7 +171,6 @@ const [allNurses, setAllNurses] = useState<DropdownNurse[]>([]);
         `/api/Doctor/Approve_Doctor_Nurse/${vendorId}/${nurseId}`
       );
 
-      // ✅ update UI instantly (same as web)
       setNurses((prev: any) =>
         prev.map((n: any) =>
           n.id === nurseId
@@ -191,6 +190,30 @@ const [allNurses, setAllNurses] = useState<DropdownNurse[]>([]);
   };
 
   useEffect(() => {
+    if (highlightedNurse) {
+      fadeAnim.setValue(0);
+
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: false,
+      }).start();
+
+      const timer = setTimeout(() => {
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 400,
+          useNativeDriver: false,
+        }).start(() => {
+          setHighlightedNurse(null);
+        });
+      }, 2500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [highlightedNurse]);
+
+  useEffect(() => {
     if (open) {
       loadAvailableNurses();
     }
@@ -199,8 +222,8 @@ const [allNurses, setAllNurses] = useState<DropdownNurse[]>([]);
   useEffect(() => {
     if (vendorId) {
       const init = async () => {
-        await loadDepartments();  // ✅ wait first
-        await loadNurses();       // ✅ then map correctly
+        await loadDepartments();
+        await loadNurses();
       };
       init();
     }
@@ -235,7 +258,6 @@ const [allNurses, setAllNurses] = useState<DropdownNurse[]>([]);
               mobile: n.mobile,
               email: n.email,
 
-              // 🔥 ADD THESE (IMPORTANT)
               is_approved: m.is_approved,
               linked_by: m.linked_by,
             };
@@ -252,18 +274,17 @@ const [allNurses, setAllNurses] = useState<DropdownNurse[]>([]);
     }
   };
 
-if (loading) {
-  return (
-    <View style={styles.loader}>
-      <ActivityIndicator size="large" color="#0F766E" />
-      <Text style={styles.loaderText}>Loading nurses...</Text>
-    </View>
-  );
-}
+  if (loading) {
+    return (
+      <View style={styles.loader}>
+        <ActivityIndicator size="large" color="#0F766E" />
+        <Text style={styles.loaderText}>Loading nurses...</Text>
+      </View>
+    );
+  }
   return (
     <View style={{ flex: 1 }}>
 
-      {/* ✅ FIXED HEADER (same as WorkDetails) */}
       <View style={styles.headerWrapper}>
         <AppHeader
           title="Nurses"
@@ -273,152 +294,141 @@ if (loading) {
           onActionPress={() => setOpen(true)}
         />
       </View>
-      
 
-      {/* ✅ SCROLLABLE CONTENT */}
-    {!nurses.length ? (
-  <View style={styles.empty}>
-    <View style={{ alignItems: "center" }}>
-      <Ionicons name="people-outline" size={40} color="#CBD5E1" />
-      <Text style={styles.emptyTitle}>No Nurses Found</Text>
-      <Text style={styles.emptyText}>
-        Start by adding a nurse to your list
-      </Text>
-    </View>
-  </View>
-) : (
-  <ScrollView
-    contentContainerStyle={styles.container}
-    showsVerticalScrollIndicator={false}
-    keyboardShouldPersistTaps="handled"
-  >
 
-        {/* NURSE CARDS */}
-        {nurses.map((nurse, index) => (
-          <View key={nurse.id} style={styles.card}>
+      {!nurses.length ? (
+        <View style={styles.empty}>
+          <View style={{ alignItems: "center" }}>
+            <Ionicons name="people-outline" size={40} color="#CBD5E1" />
+            <Text style={styles.emptyTitle}>No Nurses Found</Text>
+            <Text style={styles.emptyText}>
+              Start by adding a nurse to your list
+            </Text>
+          </View>
+        </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.container}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
 
-            {/* TOP ROW */}
-            <View style={styles.topRow}>
 
-              {/* AVATAR */}
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                  {(nurse.name || "N").trim().charAt(0).toUpperCase()}
-                </Text>
-              </View>
+          {nurses.map((nurse, index) => (
+            <View key={nurse.id} style={styles.card}>
 
-              {/* INFO */}
-              <View style={{ flex: 1 }}>
-                <Text style={styles.name}>{nurse.name}</Text>
+              <View style={styles.topRow}>
 
-                {/* DEPARTMENT + DEGREE (Beautified) */}
-                <View style={styles.infoRow}>
-
-                  <View style={styles.infoPill}>
-                    <Ionicons name="medkit-outline" size={12} color="#0F766E" />
-                    <Text style={styles.infoText}>
-                      {getDepartmentName(nurse.department)}
-                    </Text>
-                  </View>
-
-                  <View style={styles.infoPillSecondary}>
-                    <Ionicons name="school-outline" size={12} color="#2563EB" />
-                    <Text style={styles.infoTextSecondary}>
-                      {getDegreeName(nurse.qualification)}
-                    </Text>
-                  </View>
-
-                </View>
-              </View>
-
-              {/* RIGHT SIDE */}
-              <View style={styles.rightContainer}>
-
-                {/* STATUS */}
-                <View
-                  style={[
-                    styles.statusBadge,
-                    nurse.is_approved === "Y"
-                      ? styles.activeBadge
-                      : styles.inactiveBadge,
-                  ]}
-                >
-                  <Text style={styles.statusText}>
-                    {nurse.is_approved === "Y" ? "ACTIVE" : "INACTIVE"}
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>
+                    {(nurse.name || "N").trim().charAt(0).toUpperCase()}
                   </Text>
                 </View>
 
-                {/* APPROVE */}
-                <View style={styles.actionBlock}>
-                  {nurse.is_approved === "Y" ? (
-                    <View style={styles.approvedBadge}>
-                      <Text style={styles.approvedText}>Approved</Text>
-                    </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.name}>{nurse.name}</Text>
 
-                  ) : nurse.linked_by === "D" ? (
-                    <View style={styles.disabledApprove}>
-                      <Text style={styles.disabledText}>Approve</Text>
-                    </View>
+                  <View style={styles.infoRow}>
 
-                  ) : (
-                    <TouchableOpacity
-                      onPress={() => handleApproveNurse(nurse.id)}
-                      disabled={approvingId === nurse.id}
-                      style={[
-                        styles.approveBtn,
-                        approvingId === nurse.id && styles.approveLoading
-                      ]}
-                    >
-                      <Text style={styles.approveText}>
-                        {approvingId === nurse.id ? "..." : "Approve"}
+                    <View style={styles.infoPill}>
+                      <Ionicons name="medkit-outline" size={12} color="#0F766E" />
+                      <Text style={styles.infoText}>
+                        {getDepartmentName(nurse.department)}
                       </Text>
-                    </TouchableOpacity>
-                  )}
+                    </View>
+
+                    <View style={styles.infoPillSecondary}>
+                      <Ionicons name="school-outline" size={12} color="#2563EB" />
+                      <Text style={styles.infoTextSecondary}>
+                        {getDegreeName(nurse.qualification)}
+                      </Text>
+                    </View>
+
+                  </View>
                 </View>
 
-                {/* DELETE */}
-                <TouchableOpacity
-                  style={styles.deleteBtnFixed}
-                  onPress={() => setDeleteTarget(nurse)}
-                >
-                  <Ionicons name="trash" size={16} color="#DC2626" />
-                </TouchableOpacity>
+                <View style={styles.rightContainer}>
 
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      nurse.is_approved === "Y"
+                        ? styles.activeBadge
+                        : styles.inactiveBadge,
+                    ]}
+                  >
+                    <Text style={styles.statusText}>
+                      {nurse.is_approved === "Y" ? "ACTIVE" : "INACTIVE"}
+                    </Text>
+                  </View>
+
+                  <View style={styles.actionBlock}>
+                    {nurse.is_approved === "Y" ? (
+                      <View style={styles.approvedBadge}>
+                        <Text style={styles.approvedText}>Approved</Text>
+                      </View>
+
+                    ) : nurse.linked_by === "D" ? (
+                      <View style={styles.disabledApprove}>
+                        <Text style={styles.disabledText}>Approve</Text>
+                      </View>
+
+                    ) : (
+                      <TouchableOpacity
+                        onPress={() => handleApproveNurse(nurse.id)}
+                        disabled={approvingId === nurse.id}
+                        style={[
+                          styles.approveBtn,
+                          approvingId === nurse.id && styles.approveLoading
+                        ]}
+                      >
+                        <Text style={styles.approveText}>
+                          {approvingId === nurse.id ? "..." : "Approve"}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.deleteBtnFixed}
+                    onPress={() => setDeleteTarget(nurse)}
+                  >
+                    <Ionicons name="trash" size={16} color="#DC2626" />
+                  </TouchableOpacity>
+
+                </View>
               </View>
+
+              <TouchableOpacity
+                style={styles.viewProfileBtn}
+                activeOpacity={0.8}
+                onPress={() =>
+                  router.push({
+                    pathname: "/(doctor)/view-nurse",
+                    params: { nurseId: nurse.id },
+                  })
+                }
+              >
+                <View style={styles.viewProfileContent}>
+                  <Ionicons name="person-outline" size={16} color="#0F766E" />
+                  <Text style={styles.viewProfileText}>View Profile</Text>
+                  <Ionicons name="chevron-forward" size={16} color="#0F766E" />
+                </View>
+              </TouchableOpacity>
             </View>
+          ))}
 
-            <TouchableOpacity
-              style={styles.viewProfileBtn}
-              activeOpacity={0.8}
-              onPress={() =>
-                router.push({
-                  pathname: "/(doctor)/view-nurse",
-                  params: { nurseId: nurse.id },
-                })
-              }
-            >
-              <View style={styles.viewProfileContent}>
-                <Ionicons name="person-outline" size={16} color="#0F766E" />
-                <Text style={styles.viewProfileText}>View Profile</Text>
-                <Ionicons name="chevron-forward" size={16} color="#0F766E" />
-              </View>
-            </TouchableOpacity>
-          </View>
-        ))}
-        
-      </ScrollView>
-)}
+        </ScrollView>
+      )}
       <Modal visible={open} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
 
-            {/* LABEL */}
             <View style={styles.labelRow}>
               <Text style={styles.label}>Select Nurse</Text>
               <Text style={styles.required}> *</Text>
             </View>
 
-            {/* SELECT (Simple version) */}
             <TouchableOpacity
               style={styles.selectBox}
               onPress={() => setShowDropdown(!showDropdown)}
@@ -428,33 +438,82 @@ if (loading) {
               </Text>
             </TouchableOpacity>
 
-            {/* OPTIONS LIST */}
             {showDropdown && (
               <View style={{ maxHeight: 150 }}>
                 <ScrollView>
                   {allNurses.map((nurse) => (
-                    <TouchableOpacity
+                    <Animated.View
                       key={nurse.id}
-                      onPress={() => {
-                        setSelectedNurse(nurse);
-                        setShowDropdown(false);
-                        setErrors({});
-                      }}
                       style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
                         padding: 10,
                         borderBottomWidth: 1,
                         borderColor: "#eee",
+
+                        backgroundColor:
+                          highlightedNurse === nurse.id
+                            ? fadeAnim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: ["#ffffff", "#CCFBF1"],
+                            })
+                            : "#fff",
+
+                        transform: [
+                          {
+                            scale:
+                              highlightedNurse === nurse.id
+                                ? fadeAnim.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: [1, 1.03],
+                                })
+                                : 1,
+                          },
+                        ],
                       }}
                     >
-                      <Text>{nurse.label}</Text>
-                    </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={{ flex: 1 }}
+                        onPress={() => {
+                          setSelectedNurse(nurse);
+                          setShowDropdown(false);
+                          setErrors({});
+                        }}
+                      >
+                        <Text>{nurse.label}</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => {
+                          setHighlightedNurse(nurse.id);
+
+                          router.push({
+                            pathname: "/(doctor)/view-nurse",
+                            params: { nurseId: nurse.id },
+                          });
+                        }}
+                        style={{
+                          backgroundColor: "#ECFEFF",
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                          borderRadius: 6,
+                          borderWidth: 1,
+                          borderColor: "#0F766E",
+                        }}
+                      >
+                        <Text style={{ color: "#0F766E", fontSize: 12, fontWeight: "600" }}>
+                          View
+                        </Text>
+                      </TouchableOpacity>
+                    </Animated.View>
                   ))}
                 </ScrollView>
-                
+
               </View>
             )}
 
-            {/* BUTTONS */}
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.cancelBtn}
@@ -523,7 +582,7 @@ if (loading) {
           </View>
         </View>
       </Modal>
-     </View>
+    </View>
   );
 }
 const styles = StyleSheet.create({
@@ -532,13 +591,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#F1F5F9",
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 80, // 🔥 prevents bottom overlap
+    paddingBottom: 80,
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20, // more spacing
+    marginBottom: 20,
   },
 
   brand: {
@@ -606,29 +665,29 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   empty: {
-  flex: 1,
-  justifyContent: "center",
-  alignItems: "center",
-},
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
 
-emptyTitle: {
-  fontSize: 15,
-  fontWeight: "600",
-  marginTop: 10,
-  color: "#0F172A",
-},
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    marginTop: 10,
+    color: "#0F172A",
+  },
 
-emptyText: {
-  fontSize: 14,
-  color: "#64748B",
-},
+  emptyText: {
+    fontSize: 14,
+    color: "#64748B",
+  },
 
   infoPill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
 
-    backgroundColor: "#ECFEFF", // light teal
+    backgroundColor: "#ECFEFF",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
@@ -648,7 +707,7 @@ emptyText: {
     alignItems: "center",
     gap: 4,
 
-    backgroundColor: "#EFF6FF", // light blue
+    backgroundColor: "#EFF6FF",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
@@ -699,7 +758,7 @@ emptyText: {
     alignItems: "flex-end",
     justifyContent: "center",
     minWidth: 110,
-    gap: 6, // 🔥 ensures spacing between all items
+    gap: 6,
   },
   value: {
     fontSize: 12,
@@ -786,7 +845,7 @@ emptyText: {
 
     paddingVertical: 9,
     marginTop: 4,
-    backgroundColor: "#F0FDFA", // subtle teal background
+    backgroundColor: "#F0FDFA",
 
     alignItems: "center",
   },
@@ -847,7 +906,7 @@ emptyText: {
     borderRadius: 10,
     alignItems: "center",
     marginRight: 10,
-    backgroundColor: "#F8FAFC", // 🔥 subtle fill
+    backgroundColor: "#F8FAFC",
   },
 
   addBtnModal: {
@@ -856,7 +915,7 @@ emptyText: {
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: "center",
-    elevation: 2, // 🔥 android shadow
+    elevation: 2,
   },
   cancelText: {
     color: "#475569",
@@ -900,7 +959,7 @@ emptyText: {
   },
 
   approveWrapper: {
-    minWidth: 80, // 🔥 VERY IMPORTANT (fixes jumping)
+    minWidth: 80,
     alignItems: "center",
   },
 
@@ -947,32 +1006,32 @@ emptyText: {
     padding: 6,
     borderRadius: 6,
   },
-headerWrapper: {
-  backgroundColor: "#fff",
+  headerWrapper: {
+    backgroundColor: "#fff",
 
-  paddingTop: StatusBar.currentHeight || 0, // ✅ THIS FIXES IT
+    paddingTop: StatusBar.currentHeight || 0,
 
-  borderBottomWidth: 0.5,
-  borderColor: "#E2E8F0",
+    borderBottomWidth: 0.5,
+    borderColor: "#E2E8F0",
 
-  elevation: 3,
-  zIndex: 10,
+    elevation: 3,
+    zIndex: 10,
 
-  shadowColor: "#000",
-  shadowOpacity: 0.05,
-  shadowRadius: 4,
-  shadowOffset: { width: 0, height: 2 },
-},
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
   loader: {
-  flex: 1,
-  justifyContent: "center",
-  alignItems: "center",
-  backgroundColor: "#F8FAFC",
-},
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+  },
 
-loaderText: {
-  marginTop: 10,
-  fontSize: 13,
-  color: "#64748B",
-},
+  loaderText: {
+    marginTop: 10,
+    fontSize: 13,
+    color: "#64748B",
+  },
 });

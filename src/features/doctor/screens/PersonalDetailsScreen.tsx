@@ -9,16 +9,18 @@ import {
     Alert,
     Modal,
     StatusBar,
+    ActivityIndicator,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useContext } from "react";
+import { AuthContext } from "@/src/core/context/AuthContext";
 import { useEffect, useState } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import * as IntentLauncher from "expo-intent-launcher";
 import { Image } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Picker } from "@react-native-picker/picker";
 import * as DocumentPicker from "expo-document-picker";
+import { Ionicons } from "@expo/vector-icons";
 import CityStatePin from "@/src/shared/components/CityAutocomplete";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -27,75 +29,80 @@ import { useCallback } from "react";
 
 export default function PersonalDetailsScreen() {
     const [edit, setEdit] = useState(false);
-    const [loading, setLoading] = useState(false);
+    const [initialLoading, setInitialLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
     const [errors, setErrors] = useState<any>({});
     const [successModal, setSuccessModal] = useState(false);
     const [showDatePicker, setShowDatePicker] = useState(false);
-const [viewer, setViewer] = useState<{
-  visible: boolean;
-  type: "image" | "pdf";
-  data: string | null;
-}>({
-  visible: false,
-  type: "image",
-  data: null,
-});
-const router = useRouter();
+    const [showCityDropdown, setShowCityDropdown] = useState(false);
+    const [editLoading, setEditLoading] = useState(false);
+    const [viewer, setViewer] = useState<{
+        visible: boolean;
+        type: "image" | "pdf";
+        data: string | null;
+    }>({
+        visible: false,
+        type: "image",
+        data: null,
+    });
+    const router = useRouter();
+    const auth = useContext(AuthContext);
+  const vendorId = auth?.user?.vendorId;
+const token = auth?.user?.token;
+    const [form, setForm] = useState<{
+        name: string;
+        gender: string;
+        bloodGroup: string;
+        dob: string;
+        addr1: string;
+        addr2: string;
+        city: string;
+        state: string;
+        pin: string;
+        aadhaar: string;
+        pan: string;
+        summary: string;
+        email: string;
+        phone: string;
+        altPhone: string;
+        photo: string | null;
+        aadhaarFile: string | null;
+        panFile: string | null;
+    }>({
+        name: "",
+        gender: "",
+        bloodGroup: "",
+        dob: "",
+        addr1: "",
+        addr2: "",
+        city: "",
+        state: "",
+        pin: "",
+        aadhaar: "",
+        pan: "",
+        summary: "",
+        email: "",
+        phone: "",
+        altPhone: "",
+        photo: null,
+        aadhaarFile: null,
+        panFile: null,
+    });
+    useFocusEffect(
+        useCallback(() => {
+            const onBackPress = () => {
+                router.replace("/(doctor)/profile");
+                return true;
+            };
 
-   const [form, setForm] = useState<{
-  name: string;
-  gender: string;
-  bloodGroup: string;
-  dob: string;
-  addr1: string;
-  addr2: string;
-  city: string;
-  state: string;
-  pin: string;
-  aadhaar: string;
-  pan: string;
-  summary: string;
-  email: string;
-  phone: string;
-  altPhone: string;
-  photo: string | null;
-  aadhaarFile: string | null;
-  panFile: string | null;
-}>({
-  name: "",
-  gender: "",
-  bloodGroup: "",
-  dob: "",
-  addr1: "",
-  addr2: "",
-  city: "",
-  state: "",
-  pin: "",
-  aadhaar: "",
-  pan: "",
-  summary: "",
-  email: "",
-  phone: "",
-  altPhone: "",
-  photo: null,
-  aadhaarFile: null,
-  panFile: null,
-});
-useFocusEffect(
-  useCallback(() => {
-    const onBackPress = () => {
-      router.replace("/(doctor)/profile"); 
-      return true;
-    };
+            const subscription = BackHandler.addEventListener(
+                "hardwareBackPress",
+                onBackPress
+            );
 
-    const subscription = BackHandler.addEventListener(
-      "hardwareBackPress",
-      onBackPress
+            return () => subscription.remove();
+        }, [])
     );
-
-    return () => subscription.remove();
-  }, [])
-);
     const validate = () => {
         const e: any = {};
 
@@ -108,18 +115,14 @@ useFocusEffect(
         if (!form.email) e.email = "Email required";
         else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
             e.email = "Invalid email";
-
-        // 📱 PHONE
         if (!form.phone) e.phone = "Phone required";
         else if (!/^\d{10}$/.test(form.phone))
             e.phone = "Must be exactly 10 digits";
 
-        // 🆔 AADHAAR
         if (!form.aadhaar) e.aadhaar = "Aadhaar required";
         else if (!/^\d{12}$/.test(form.aadhaar))
             e.aadhaar = "Must be exactly 12 digits";
 
-        // 🧾 PAN
         if (!form.pan) e.pan = "PAN required";
         else if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(form.pan))
             e.pan = "Format: ABCDE1234F";
@@ -154,10 +157,10 @@ useFocusEffect(
         if (!result.canceled) {
             const base64 = result.assets[0].base64;
 
-            setForm({
-                ...form,
+            setForm((prev) => ({
+                ...prev,
                 photo: `data:image/jpeg;base64,${base64}`,
-            });
+            }));
         }
     };
     const pickDocument = async (field: "aadhaarFile" | "panFile") => {
@@ -177,10 +180,10 @@ useFocusEffect(
             encoding: "base64",
         });
 
-        setForm({
-            ...form,
+        setForm((prev) => ({
+            ...prev,
             [field]: base64,
-        });
+        }));
     };
 
 
@@ -202,42 +205,45 @@ useFocusEffect(
     const handleChange = (field: string, value: any, options?: any) => {
         let finalValue = value;
 
-        // 🔹 NUMERIC ONLY
         if (options?.numeric) {
             finalValue = value.replace(/[^0-9]/g, "");
         }
-
-        // 🔹 UPPERCASE
         if (options?.uppercase) {
             finalValue = finalValue.toUpperCase();
         }
 
-        // 🔹 MAX LENGTH (CRITICAL FIX)
         if (options?.maxLength) {
             finalValue = finalValue.slice(0, options.maxLength);
         }
-
-        // 🔹 UPDATE FORM
         setForm((prev) => ({
             ...prev,
             [field]: finalValue,
         }));
 
-        // 🔹 REMOVE ERROR
         setErrors((prev: any) => {
             const copy = { ...prev };
             delete copy[field];
             return copy;
         });
     };
-    // 🔹 FETCH DATA (LIKE WEB)
+
     useEffect(() => {
         fetchData();
     }, []);
 
+    useEffect(() => {
+        if (successModal) {
+            const timer = setTimeout(() => {
+                setSuccessModal(false);
+            }, 2000);
+
+            return () => clearTimeout(timer);
+        }
+    }, [successModal]);
     const fetchData = async () => {
         try {
-            const vendorId = await AsyncStorage.getItem("vendorId");
+            setInitialLoading(true);
+
 
             const res = await fetch(
                 `https://coreapi-service-111763741518.asia-south1.run.app/api/Doctor/GetDoctorById/${vendorId}`
@@ -247,7 +253,8 @@ useFocusEffect(
 
             const docs = data.doctorDocs?.[0] || {};
 
-            setForm({
+            setForm((prev) => ({
+                ...prev,
                 name: data.full_Name || "",
                 gender: data.gender || "",
                 bloodGroup: data.bloodG || "",
@@ -257,37 +264,44 @@ useFocusEffect(
                 city: data.city || "",
                 state: data.state || "",
                 pin: data.pin_code || "",
-                aadhaar: data.adhaarNo || "",
-                pan: data.panNo || "",
+                aadhaar: String(data.adhaarNo || data.aadharNo || ""),
+                pan: String(data.panNo || ""),
                 summary: data.summary || "",
                 email: data.email || "",
                 phone: data.mobile || "",
                 altPhone: data.mobile_1 || "",
-
-                // ✅ DOCUMENTS
                 photo: docs.photo || null,
                 aadhaarFile: docs.adhaar || null,
                 panFile: docs.pan || null,
-            });
+            }));
+
         } catch (err) {
             console.log("Fetch Error:", err);
+        } finally {
+            setInitialLoading(false);
         }
     };
-
-    // 🔹 TOGGLE EDIT
     const handleEdit = () => {
-        setEdit((prev) => !prev);
-    };
+  if (editLoading || saving || initialLoading || successModal) return;
 
+  setEditLoading(true);
 
-    // 🔹 SAVE API
+  setShowCityDropdown(false);
+
+  setEdit(prev => !prev);
+
+  setTimeout(() => {
+    setEditLoading(false);
+  }, 400);
+};
     const handleSave = async () => {
         if (!validate()) return;
         try {
-            setLoading(true);
-
-            const vendorId = await AsyncStorage.getItem("vendorId");
-            const token = await AsyncStorage.getItem("accessToken");
+            if (!vendorId || !token) {
+  Alert.alert("Error", "Session expired");
+  return;
+}
+            setSaving(true);
 
             const body = new FormData();
 
@@ -305,6 +319,8 @@ useFocusEffect(
             body.append("State", form.state);
             body.append("pin_code", form.pin);
             body.append("Summary", form.summary);
+            body.append("adhaarNo", form.aadhaar);
+            body.append("panNo", form.pan);
             if (form.photo) {
                 body.append("photo", await base64ToFile(form.photo, "photo.jpg"));
             }
@@ -336,14 +352,22 @@ useFocusEffect(
         } catch (err) {
             Alert.alert("Error", "Update failed");
         } finally {
-            setLoading(false);
+            setSaving(false);
         }
     };
 
+    if (initialLoading) {
+        return (
+            <View style={{ flex: 1 }}>
+                <View style={styles.loader}>
+                    <ActivityIndicator size="large" color="#0F766E" />
+                    <Text style={styles.loaderText}>Loading details...</Text>
+                </View>
+            </View>
+        );
+    }
     return (
         <View style={{ flex: 1 }}>
-
-            {/* ✅ FIXED HEADER */}
             <View style={styles.headerWrapper}>
                 <AppHeader
                     title="Personal Information"
@@ -351,18 +375,16 @@ useFocusEffect(
                     icon="person-outline"
                     actionText={edit ? "Cancel" : "Edit"}
                     onActionPress={handleEdit}
+                    disabled={editLoading || saving}
                 />
             </View>
-
-            {/* ✅ SCROLLABLE CONTENT */}
             <ScrollView
                 contentContainerStyle={[styles.container, { paddingBottom: 120 }]}
                 showsVerticalScrollIndicator={false}
             >
-                {/* PERSONAL DETAILS */}
                 <View style={styles.card}>
                     <Input label="Full Name *" value={form.name} editable={edit} error={errors.name}
-                        onChangeText={(v: any) => setForm({ ...form, name: v })} />
+                        onChangeText={(v: string) => handleChange("name", v)} />
 
 
                     <View style={{ marginBottom: 14 }}>
@@ -378,9 +400,9 @@ useFocusEffect(
                                 enabled={edit}
                             >
                                 <Picker.Item label="Select Gender" value="" />
-                                <Picker.Item label="Male" value="Male" />
-                                <Picker.Item label="Female" value="Female" />
-                                <Picker.Item label="Other" value="Other" />
+                                <Picker.Item label="Male" value="M" />
+                                <Picker.Item label="Female" value="F" />
+                                <Picker.Item label="Other" value="O" />
                             </Picker>
                         </View>
 
@@ -470,19 +492,24 @@ useFocusEffect(
                     </Modal>
 
                     <Input label="Address Line 1 *" value={form.addr1} editable={edit} error={errors.addr1}
-                        onChangeText={(v: any) => setForm({ ...form, addr1: v })} />
+                        onChangeText={(v: any) =>
+                            setForm((prev) => ({ ...prev, addr1: v }))
+                        } />
 
                     <Input label="Address Line 2" value={form.addr2} editable={edit}
-                        onChangeText={(v: any) => setForm({ ...form, addr2: v })} />
+                        onChangeText={(v: any) =>
+                            setForm((prev) => ({ ...prev, addr2: v }))
+                        } />
 
                     <CityStatePin
                         form={form}
                         setForm={setForm}
                         setErrors={setErrors}
                         errors={errors}
-                        mode={edit ? "edit" : "view"}   // ✅ IMPORTANT
+                        mode={edit ? "edit" : "view"}
+                        showDropdown={showCityDropdown}
+                        setShowDropdown={setShowCityDropdown}
                     />
-
                     <Input
                         label="Aadhaar Number *"
                         value={form.aadhaar}
@@ -505,10 +532,10 @@ useFocusEffect(
                         }
                     />
                     <Input label="Introduction *" value={form.summary} editable={edit} multiline error={errors.summary}
-                        onChangeText={(v: any) => setForm({ ...form, summary: v })} />
+                        onChangeText={(v: any) =>
+                            setForm((prev) => ({ ...prev, summary: v }))
+                        } />
                 </View>
-
-                {/* CONTACT */}
                 <View style={styles.card}>
                     <Text style={styles.sectionTitle}>Contact</Text>
 
@@ -538,7 +565,6 @@ useFocusEffect(
                     />
                 </View>
 
-                {/* DOCUMENTS */}
                 <View style={styles.card}>
                     <Text style={styles.sectionTitle}>Documents</Text>
 
@@ -568,18 +594,17 @@ useFocusEffect(
                     />
                 </View>
 
-                {/* IMAGE MODAL */}
                 <Modal visible={viewer.visible} transparent>
                     <View style={styles.modalOverlay}>
                         {viewer.type === "image" && (
                             <View style={styles.imageContainer}>
-                               {viewer.data && (
-  <Image
-    source={{ uri: viewer.data as string }}
-    style={styles.fullImage}
-    resizeMode="contain"
-  />
-)}
+                                {viewer.data && (
+                                    <Image
+                                        source={{ uri: viewer.data as string }}
+                                        style={styles.fullImage}
+                                        resizeMode="contain"
+                                    />
+                                )}
 
                                 <TouchableOpacity
                                     style={styles.closeBtn}
@@ -594,35 +619,38 @@ useFocusEffect(
                     </View>
                 </Modal>
                 <Modal visible={successModal} transparent animationType="fade">
-                    <View style={styles.modalOverlay}>
-                        <View style={styles.successBox}>
-                            <Text style={styles.successTitle}>Success</Text>
-                            <Text style={styles.successText}>
-                                Profile updated successfully
+                    <View style={modalStyles.overlay}>
+                        <View style={modalStyles.card}>
+
+                            <View style={modalStyles.iconWrapper}>
+                                <Ionicons name="checkmark-circle" size={48} color="#16A34A" />
+                            </View>
+
+                            <Text style={modalStyles.title}>Success!</Text>
+
+                            <Text style={modalStyles.subtitle}>
+                                Your profile has been updated successfully.
                             </Text>
 
                             <TouchableOpacity
-                                style={styles.successBtn}
+                                style={modalStyles.button}
                                 onPress={() => setSuccessModal(false)}
                             >
-                                <Text style={{ color: "#fff" }}>OK</Text>
+                                <Text style={modalStyles.buttonText}>Done</Text>
                             </TouchableOpacity>
+
                         </View>
                     </View>
                 </Modal>
             </ScrollView>
-
-            {/* BOTTOM UPDATE BUTTON */}
             {edit && (
                 <View style={styles.bottomBar}>
                     <TouchableOpacity
                         style={styles.saveBtn}
                         onPress={handleSave}
-                        disabled={loading}
+                      disabled={saving || initialLoading}
                     >
-                        <Text style={styles.saveText}>
-                            {loading ? "Updating..." : "Update"}
-                        </Text>
+                        <Text style={styles.saveText}>   {saving ? "Updating..." : "Update"}</Text>
                     </TouchableOpacity>
                 </View>
             )}
@@ -658,14 +686,6 @@ function Input({ label, value, editable, onChangeText, error, multiline = false 
     );
 }
 
-function DocButton({ label }: any) {
-    return (
-        <TouchableOpacity style={styles.docBtn}>
-            <Text style={styles.docText}>{label}</Text>
-        </TouchableOpacity>
-    );
-}
-
 const styles = StyleSheet.create({
     container: {
         flexGrow: 1,
@@ -694,7 +714,7 @@ const styles = StyleSheet.create({
     headerWrapper: {
         backgroundColor: "#fff",
 
-        paddingTop: StatusBar.currentHeight || 0, // ✅ THIS FIXES IT
+        paddingTop: StatusBar.currentHeight || 0,
 
         borderBottomWidth: 0.5,
         borderColor: "#E2E8F0",
@@ -756,11 +776,11 @@ const styles = StyleSheet.create({
         marginBottom: 10,
     },
     dateModalContainer: {
-  backgroundColor: "#fff",
-  padding: 10,
-  borderTopLeftRadius: 16,
-  borderTopRightRadius: 16,
-},
+        backgroundColor: "#fff",
+        padding: 10,
+        borderTopLeftRadius: 16,
+        borderTopRightRadius: 16,
+    },
     bottomBar: {
         position: "absolute",
         bottom: 0,
@@ -854,6 +874,18 @@ const styles = StyleSheet.create({
         height: 80,
         textAlignVertical: "top",
     },
+    loader: {
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundColor: "#F8FAFC",
+    },
+
+    loaderText: {
+        marginTop: 10,
+        fontSize: 13,
+        color: "#64748B",
+    },
     docBtn: {
         backgroundColor: "#0F766E",
         padding: 14,
@@ -871,7 +903,52 @@ const styles = StyleSheet.create({
         borderRadius: 14,
         alignItems: "center",
     },
-  
+
+});
+const modalStyles = StyleSheet.create({
+    overlay: {
+        flex: 1,
+        backgroundColor: "rgba(0,0,0,0.4)",
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    card: {
+        width: "85%",
+        backgroundColor: "#fff",
+        borderRadius: 20,
+        padding: 24,
+        alignItems: "center",
+    },
+    iconWrapper: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: "#DCFCE7",
+        justifyContent: "center",
+        alignItems: "center",
+        marginBottom: 12,
+    },
+    title: {
+        fontSize: 18,
+        fontWeight: "700",
+        marginBottom: 6,
+    },
+    subtitle: {
+        fontSize: 13,
+        color: "#64748B",
+        textAlign: "center",
+        marginBottom: 20,
+    },
+    button: {
+        backgroundColor: "#0F766E",
+        paddingVertical: 12,
+        paddingHorizontal: 30,
+        borderRadius: 10,
+    },
+    buttonText: {
+        color: "#fff",
+        fontWeight: "600",
+    },
 });
 function DocumentField({
     label,
@@ -931,7 +1008,6 @@ function DocumentField({
 
             <View style={styles.docBox}>
 
-                {/* LEFT SIDE */}
                 {file ? (
                     isPdf ? (
                         <Text style={styles.docTextField}>PDF Uploaded</Text>
@@ -951,15 +1027,12 @@ function DocumentField({
                     </Text>
                 )}
 
-                {/* RIGHT SIDE */}
                 {file && (
                     <TouchableOpacity style={styles.viewBtn} onPress={handleView}>
                         <Text style={styles.viewText}>View</Text>
                     </TouchableOpacity>
                 )}
             </View>
-
-            {/* EDIT MODE INPUT */}
             {edit && (
                 <TouchableOpacity style={styles.uploadBtn} onPress={onPick}>
                     <Text style={styles.uploadText}>

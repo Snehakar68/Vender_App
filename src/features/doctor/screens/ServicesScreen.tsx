@@ -9,7 +9,6 @@ import {
   StatusBar,
 } from "react-native";
 import { useEffect, useState } from "react";
-import { SafeAreaView } from "react-native-safe-area-context";
 import AppHeader from "@/src/shared/components/AppHeader";
 import { useContext } from "react";
 import { AuthContext } from "@/src/core/context/AuthContext";
@@ -71,7 +70,6 @@ export default function ServicesScreen() {
 
   const handleEditToggle = () => {
     if (edit) {
-      // CANCEL → restore old data
       setServices(backupServices);
     }
     setEdit((prev) => !prev);
@@ -120,7 +118,6 @@ export default function ServicesScreen() {
           method: "PUT",
           headers: {
             Authorization: `Bearer ${token}`,
-            // ❌ DO NOT add Content-Type
           },
           body: formData,
         }
@@ -132,7 +129,7 @@ export default function ServicesScreen() {
       setBackupServices(services);
       setEdit(false);
     } catch (e) {
-      console.log("❌ ERROR:", e);
+      console.log(" ERROR:", e);
 
       const error = e as any;
 
@@ -183,12 +180,12 @@ export default function ServicesScreen() {
         };
 
         setServices(mapped);
-        setBackupServices(mapped); // ✅ IMPORTANT
+        setBackupServices(mapped);
 
       } catch (e) {
         console.log("Fetch error", e);
       } finally {
-        setLoading(false); // 🔥 IMPORTANT
+        setLoading(false);
       }
     };
 
@@ -235,7 +232,6 @@ export default function ServicesScreen() {
       >
 
         <View style={styles.card}>
-          {/* ONLINE SERVICE */}
           <View style={styles.serviceBlock}>
             <View style={styles.row}>
               <View>
@@ -287,7 +283,6 @@ export default function ServicesScreen() {
             )}
           </View>
 
-          {/* HOME VISIT */}
           <View style={styles.serviceBlock}>
             <View style={styles.row}>
               <View>
@@ -340,7 +335,6 @@ export default function ServicesScreen() {
             )}
           </View>
         </View>
-        {/* BUTTON */}
         {edit && (
           <TouchableOpacity
             activeOpacity={0.85}
@@ -423,7 +417,7 @@ const styles = StyleSheet.create({
  headerWrapper: {
    backgroundColor: "#fff",
  
-   paddingTop: StatusBar.currentHeight || 0, // ✅ THIS FIXES IT
+   paddingTop: StatusBar.currentHeight || 0, 
  
    borderBottomWidth: 0.5,
    borderColor: "#E2E8F0",
@@ -478,7 +472,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  /* INPUT */
   inputWrapper: {
     marginTop: 14,
   },
@@ -520,7 +513,6 @@ const styles = StyleSheet.create({
     color: "#0F172A",
   },
 
-  /* TOGGLE */
   toggle: {
     width: 56,
     height: 30,
@@ -545,7 +537,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: "#DC2626", // red
+    backgroundColor: "#DC2626", 
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 14,
@@ -559,7 +551,7 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#7F1D1D", // dark red
+    color: "#7F1D1D", 
   },
 
   errorBtn: {
@@ -579,7 +571,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: "#16A34A", // success green
+    backgroundColor: "#16A34A", 
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 14,
@@ -617,7 +609,6 @@ const styles = StyleSheet.create({
     alignSelf: "flex-end",
   },
 
-  /* BUTTON */
   saveBtn: {
     backgroundColor: "#0F766E",
     paddingVertical: 16,
@@ -689,7 +680,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#F8FAFC", // match app bg
+    backgroundColor: "#F8FAFC", 
   },
 
   loaderText: {

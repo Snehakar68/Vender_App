@@ -7,19 +7,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 export default function Splash() {
   useEffect(() => {
     const init = async () => {
-      // ⏳ Splash delay
       await new Promise((res) => setTimeout(res, 1000));
 
       const token = await getAccessToken();
       const user = await AsyncStorage.getItem("user");
-
-      // ❌ Not logged in
       if (!token || !user) {
         router.replace("/(auth)/login");
         return;
       }
-// router.replace("/(auth)/login");
-// return;
 
       const parsed = JSON.parse(user);
 
@@ -47,7 +42,6 @@ export default function Splash() {
 
   return (
     <View style={styles.container}>
-      {/* Logo */}
       <View style={styles.logoContainer}>
         <Image
           source={require("../src/assets/images/logo.png")}
@@ -55,11 +49,8 @@ export default function Splash() {
         />
       </View>
 
-      {/* App Name */}
       <Text style={styles.title}>Jhilmil Homecare</Text>
       <Text style={styles.subtitle}>Care with Precision & Empathy</Text>
-
-      {/* Loader */}
       <View style={styles.loaderContainer}>
         <Text style={styles.loader}>● ● ●</Text>
       </View>

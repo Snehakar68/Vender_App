@@ -16,7 +16,7 @@ export const logout = async (setUser?: (val: any) => void) => {
         {
           headers: {
             Authorization: `Bearer ${token}`,
-            "x-vendor-id": vendorId, // 👈 vendor-aware logout
+            "x-vendor-id": vendorId,
           },
         }
       );
@@ -29,7 +29,6 @@ export const logout = async (setUser?: (val: any) => void) => {
     }
   }
 
-  // 🔥 Clear everything
   await clearTokens();
   await AsyncStorage.removeItem("user");
 

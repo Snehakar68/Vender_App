@@ -10,14 +10,51 @@ import { Ionicons, Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useContext } from "react";
 import { AuthContext } from "@/src/core/context/AuthContext";
-import { logout} from "@/src/utils/logout";
+import { useEffect, useState } from "react";
+import { Image } from "react-native";
+import { logout } from "@/src/utils/logout";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function ProfileScreen() {
-const auth = useContext(AuthContext);
+  const auth = useContext(AuthContext);
+  const [doctor, setDoctor] = useState<any>(null);
+  const [designations, setDesignations] = useState<any[]>([]);
+  if (!auth) return null;
 
-if (!auth) return null; // or loader
+  const { logout } = auth;
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const vendorId = await AsyncStorage.getItem("vendorId");
 
-const { logout } = auth;
+        if (!vendorId) {
+          console.log("Vendor ID not found");
+          return;
+        }
+
+        const [doctorRes, desigRes] = await Promise.all([
+          fetch(`https://coreapi-service-111763741518.asia-south1.run.app/api/Doctor/GetDoctorById/${vendorId}`),
+          fetch("https://coreapi-service-111763741518.asia-south1.run.app/api/Doctor/Get_Doctor_Designation")
+        ]);
+
+        const doctorData = await doctorRes.json();
+        const desigData = await desigRes.json();
+
+        setDoctor(doctorData);
+        setDesignations(desigData);
+
+      } catch (err) {
+        console.log("API Error:", err);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const getDesignationName = (id: number) => {
+    const match = designations.find((d) => d.id === id);
+    return match ? match.desig_name : "Doctor";
+  };
 
   return (
     <SafeAreaView style={{ flex: 1 }}>
@@ -26,25 +63,29 @@ const { logout } = auth;
         showsVerticalScrollIndicator={false}
       >
 
-        {/* PROFILE CARD */}
         <View style={styles.profileCard}>
-
-          {/* AVATAR */}
           <View style={styles.avatarWrapper}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>LC</Text>
-            </View>
-
-            <View style={styles.editIcon}>
-              <Feather name="edit-2" size={12} color="#fff" />
+              {doctor?.doctorDocs?.[0]?.photo ? (
+                <Image
+                  source={{
+                    uri: `data:image/png;base64,${doctor.doctorDocs[0].photo.trim()}`,
+                  }}
+                  style={{ width: "100%", height: "100%", borderRadius: 40 }}
+                />
+              ) : (
+                <Text style={styles.avatarText}>LC</Text>
+              )}
             </View>
           </View>
 
-          {/* NAME */}
-          <Text style={styles.name}>LifeCare Specialty</Text>
-          <Text style={styles.subText}>Partner Hospital</Text>
+          <Text style={styles.name}>
+            {doctor?.full_Name || "Loading..."}
+          </Text>
+          <Text style={styles.subText}>
+            {doctor ? getDesignationName(doctor.designation) : "Loading..."}
+          </Text>
 
-          {/* BUTTON */}
           <TouchableOpacity
             style={styles.viewBtn}
             onPress={() => router.push("/(doctor)/personal-details")}
@@ -54,7 +95,6 @@ const { logout } = auth;
           </TouchableOpacity>
         </View>
 
-        {/* MENU CARD */}
         <View style={styles.menuCard}>
 
           <MenuItem
@@ -76,19 +116,14 @@ const { logout } = auth;
           />
         </View>
 
-        {/* LOGOUT */}
-      <TouchableOpacity
-  style={styles.logoutBtn}
-  onPress={logout}
->
-  <Ionicons name="log-out-outline" size={18} color="#DC2626" />
-  <Text style={styles.logoutText}>Sign Out</Text>
-</TouchableOpacity>
+        <TouchableOpacity
+          style={styles.logoutBtn}
+          onPress={logout}
+        >
+          <Ionicons name="log-out-outline" size={18} color="#DC2626" />
+          <Text style={styles.logoutText}>Sign Out</Text>
+        </TouchableOpacity>
 
-        {/* VERSION */}
-        <Text style={styles.version}>
-          App Version 2.4.1 (Build 108)
-        </Text>
 
       </ScrollView>
     </SafeAreaView>
@@ -102,7 +137,6 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
-  /* PROFILE CARD */
   profileCard: {
     backgroundColor: "#fff",
     borderRadius: 20,
@@ -171,7 +205,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
-  /* MENU */
   menuCard: {
     backgroundColor: "#fff",
     borderRadius: 16,
@@ -210,7 +243,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  /* LOGOUT */
   logoutBtn: {
     flexDirection: "row",
     alignItems: "center",

@@ -18,6 +18,7 @@ import * as IntentLauncher from "expo-intent-launcher";
 import { useRouter, useFocusEffect } from "expo-router";
 import { BackHandler } from "react-native";
 import { useCallback } from "react";
+import { ActivityIndicator } from "react-native";
 
 
 export default function ViewNurseScreen() {
@@ -30,7 +31,6 @@ export default function ViewNurseScreen() {
 
 
 
-    // ✅ MOVE HERE
     const [viewer, setViewer] = useState<{
         visible: boolean;
         type: "image" | "pdf";
@@ -62,23 +62,10 @@ export default function ViewNurseScreen() {
         return degrees.find((d) => d.id === Number(id))?.degree_Name || id;
     };
 
-    const getAccountType = (type: string) => {
-        if (!type) return "-";
-
-        const map: any = {
-            S: "Savings",
-            C: "Current",
-            SALARY: "Salary",
-            SA: "Salary",   // fallback (sometimes APIs send this)
-        };
-
-        return map[type] || type;
-    };
-
     useFocusEffect(
         useCallback(() => {
             const onBackPress = () => {
-                router.replace("/(doctor)/nurse-list"); // 🔥 important
+                router.replace("/(doctor)/nurse-list");
                 return true; // prevent default behavior
             };
 
@@ -130,15 +117,10 @@ export default function ViewNurseScreen() {
                     shift: n.shift,
                     shiftChange: n.shiftchange,
 
-                    // 🔥 Linking
                     linkedWith: n.nurseLinked?.linked_with,
                     linkedId: n.nurseLinked?.linked_id,
                     isApproved: n.nurseLinked?.is_approved,
 
-                    // 🔥 Bank
-                    bank: n.bankDetails,
-
-                    // 🔥 Image
                     panFile: n.nurseIMG?.[0]?.pan || null,
                     aadhaarFile: n.nurseIMG?.[0]?.adhaar || null,
                     licenseFile: n.nurseIMG?.[0]?.license || null,
@@ -150,7 +132,7 @@ export default function ViewNurseScreen() {
 
                 setData(mapped);
             } catch (e) {
-                console.log("❌ Failed to load nurse");
+                console.log("Failed to load nurse");
             } finally {
                 setLoading(false);
             }
@@ -170,7 +152,7 @@ export default function ViewNurseScreen() {
                 setDepartments(depRes.data || []);
                 setDegrees(degRes.data || []);
             } catch (e) {
-                console.log("❌ Failed to load masters");
+                console.log(" Failed to load masters");
             }
         };
 
@@ -179,12 +161,12 @@ export default function ViewNurseScreen() {
 
     if (loading) {
         return (
-            <SafeAreaView style={styles.center}>
-                <Text>Loading...</Text>
-            </SafeAreaView>
+            <View style={styles.loader}>
+                <ActivityIndicator size="large" color="#0F766E" />
+                <Text style={styles.loaderText}>Loading nurse details...</Text>
+            </View>
         );
     }
-
     if (!data) {
         return (
             <SafeAreaView style={styles.center}>
@@ -196,7 +178,6 @@ export default function ViewNurseScreen() {
     return (
         <View style={{ flex: 1 }}>
 
-            {/* ✅ FIXED HEADER */}
             <View style={styles.headerWrapper}>
                 <AppHeader
                     title="View Nurse"
@@ -204,14 +185,10 @@ export default function ViewNurseScreen() {
                     icon="person-outline"
                 />
             </View>
-            {/* ✅ SCROLLABLE CONTENT */}
             <ScrollView contentContainerStyle={styles.container}>
-
-                {/* PROFILE */}
                 <View style={styles.profileCard}>
                     <View style={styles.profileRow}>
 
-                        {/* IMAGE (Touchable stays) */}
                         <TouchableOpacity
                             activeOpacity={0.85}
                             onPress={() => {
@@ -235,14 +212,12 @@ export default function ViewNurseScreen() {
                             )}
                         </TouchableOpacity>
 
-                        {/* TEXT */}
                         <View style={{ flex: 1 }}>
                             <Text style={styles.name}>{data.name}</Text>
                             <Text style={styles.sub}>
                                 {data.gender} • {data.dob}
                             </Text>
 
-                            {/* STATUS BADGE */}
                             <View style={styles.statusBadge}>
                                 <Text style={styles.statusText}>
                                     {data.isApproved === "Y" ? "Approved" : "Pending"}
@@ -252,7 +227,6 @@ export default function ViewNurseScreen() {
 
                     </View>
                 </View>
-                {/* PERSONAL */}
                 <View style={styles.card}>
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>Personal Information</Text>
@@ -273,7 +247,6 @@ export default function ViewNurseScreen() {
                     <Info label="Summary" value={data.summary} />
                 </View>
 
-                {/* PROFESSIONAL */}
                 <View style={styles.card}>
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>Professional Information</Text>
@@ -307,22 +280,6 @@ export default function ViewNurseScreen() {
                         value={data.isApproved === "Y" ? "Approved" : "Pending"}
                     />
                 </View>
-                <View style={styles.card}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Bank Details</Text>
-                    </View>
-
-                    <Info label="Bank Name" value={data.bank?.bankName} />
-                    <Info label="Branch" value={data.bank?.branchName} />
-                    <Info label="IFSC" value={data.bank?.ifscCode} />
-
-                    <Info label="Account Holder" value={data.bank?.accountHolderName} />
-                    <Info label="Account Number" value={data.bank?.accountNumber} />
-                    <Info
-                        label="Account Type"
-                        value={getAccountType(data.bank?.accountType)}
-                    />
-                </View>
 
                 <View style={styles.card}>
                     <View style={styles.sectionHeader}>
@@ -350,8 +307,6 @@ export default function ViewNurseScreen() {
                                     style={styles.fullImage}
                                     resizeMode="contain"
                                 />
-
-                                {/* 🔥 Close button attached to image */}
                                 <TouchableOpacity
                                     style={styles.closeBtnDynamic}
                                     onPress={() =>
@@ -371,19 +326,16 @@ export default function ViewNurseScreen() {
     );
 }
 
-/* 🔹 Reusable Row */
 const Info = ({ label, value }: any) => (
     <View style={styles.row}>
         <Text style={styles.label}>{label}</Text>
         <Text style={styles.value}>{value || "-"}</Text>
     </View>
 );
-
-/* 🔹 Styles */
 const styles = StyleSheet.create({
     container: {
         padding: 16,
-        paddingTop: 12, // 🔥 reduced (header already separated)
+        paddingTop: 12,
         backgroundColor: "#F1F5F9",
     },
     header: {
@@ -391,15 +343,15 @@ const styles = StyleSheet.create({
         justifyContent: "space-between",
         alignItems: "center",
 
-        height: 56,              // 🔥 CONTROL HEIGHT (key change)
-        paddingHorizontal: 16,   // keep horizontal spacing
+        height: 56,
+        paddingHorizontal: 16,
 
-        marginBottom: 12,        // slightly reduced spacing
+        marginBottom: 12,
     },
     headerWrapper: {
         backgroundColor: "#fff",
 
-        paddingTop: StatusBar.currentHeight || 0, // ✅ THIS FIXES IT
+        paddingTop: StatusBar.currentHeight || 0,
 
         borderBottomWidth: 0.5,
         borderColor: "#E2E8F0",
@@ -455,7 +407,7 @@ const styles = StyleSheet.create({
     left: {
         flexDirection: "row",
         alignItems: "center",
-        flex: 1, // 🔥 ensures proper vertical + horizontal balance
+        flex: 1,
     },
 
 
@@ -481,8 +433,8 @@ const styles = StyleSheet.create({
 
     closeBtnDynamic: {
         position: "absolute",
-        top: 10,              // 🔥 always above image
-        alignSelf: "center",  // center horizontally
+        top: 10,
+        alignSelf: "center",
         backgroundColor: "rgba(0,0,0,0.6)",
         borderRadius: 20,
         padding: 8,
@@ -612,7 +564,18 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         marginBottom: 10,
     },
+    loader: {
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundColor: "#F8FAFC",
+    },
 
+    loaderText: {
+        marginTop: 10,
+        fontSize: 13,
+        color: "#64748B",
+    },
     viewBtn: {
         backgroundColor: "#0F766E",
         paddingHorizontal: 14,
@@ -629,7 +592,7 @@ const styles = StyleSheet.create({
 const DocumentView = ({ label, file, setViewer }: any) => {
     if (!file) return <Info label={label} value="Not Available" />;
 
-    const isPdf = file.startsWith("JVBER"); // PDF base64
+    const isPdf = file.startsWith("JVBER");
 
     const handleView = async () => {
         try {
@@ -642,7 +605,6 @@ const DocumentView = ({ label, file, setViewer }: any) => {
                     encoding: "base64",
                 });
 
-                // ✅ FIX: convert to content URI
                 const contentUri = await FileSystem.getContentUriAsync(fileUri);
 
                 await IntentLauncher.startActivityAsync(
@@ -661,7 +623,7 @@ const DocumentView = ({ label, file, setViewer }: any) => {
                 });
             }
         } catch (e) {
-            console.log("❌ Document open failed", e);
+            console.log(" Document open failed", e);
         }
     };
     return (

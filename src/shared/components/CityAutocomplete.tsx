@@ -1,3 +1,4 @@
+//src/shared/components/CityAutocomplete.tsx  
 import {
   View,
   TextInput,
@@ -15,24 +16,24 @@ export default function CityStatePin({
   setForm,
   setErrors,
   errors = {},
-  mode = "add", // add | edit | view
+  mode = "add",
 }: any) {
   const [query, setQuery] = useState(form.city || "");
   const [results, setResults] = useState<any[]>([]);
   const [selected, setSelected] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const isView = mode === "view";
   const enablePin = mode !== "view";
 
-  // 🔥 AUTOCOMPLETE
   useEffect(() => {
-     if (selected) return;
-    if (query.length < 2) {
+    if (selected) return;
+    if (!isFocused || selected || query.length < 2) {
       setResults([]);
       return;
     }
 
     const timer = setTimeout(async () => {
-     
+
       try {
         const res = await fetch(
           `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${query}&types=(cities)&components=country:in&key=${GoogleMapApiKey}`
@@ -48,7 +49,6 @@ export default function CityStatePin({
     return () => clearTimeout(timer);
   }, [query]);
 
-  // 🔥 PLACE DETAILS
   const fetchPlaceDetails = async (placeId: string) => {
     setSelected(true);
     try {
@@ -89,7 +89,6 @@ export default function CityStatePin({
       setTimeout(() => {
         setResults([]);
       }, 0);
-      // ✅ clear errors
       setErrors((prev: any) => {
         const copy = { ...prev };
         delete copy.city;
@@ -104,25 +103,24 @@ export default function CityStatePin({
 
   return (
     <View style={{ zIndex: 9999 }}>
-      {/* 🔹 CITY */}
       <Text style={styles.label}>City <Text style={styles.star}>*</Text></Text>
       <TextInput
         value={query}
         editable={!isView}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setTimeout(() => setIsFocused(false), 200)}
         onChangeText={(text) => {
           setSelected(false);
           setQuery(text);
           setForm((p: any) => ({ ...p, city: text }));
         }}
         placeholder="Type city name"
-        style={[
-          styles.input
-        ]}
+        style={styles.input}
       />
 
       {errors.city && <Text style={styles.error}>{errors.city}</Text>}
 
-      {results.length > 0 && !isView && (
+      {isFocused && results.length > 0 && !isView && (
         <View style={styles.dropdown}>
           <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
             {results.map((item) => (
@@ -137,8 +135,6 @@ export default function CityStatePin({
           </ScrollView>
         </View>
       )}
-
-      {/* 🔹 STATE */}
       <Text style={styles.label}>State <Text style={styles.star}>*</Text></Text>
       <TextInput
         value={form.state}
@@ -150,8 +146,6 @@ export default function CityStatePin({
         ]}
       />
       {errors.state && <Text style={styles.error}>{errors.state}</Text>}
-
-      {/* 🔹 PIN */}
       <Text style={styles.label}>PIN Code <Text style={styles.star}>*</Text></Text>
       <TextInput
         value={form.pin}
@@ -202,7 +196,7 @@ const styles = StyleSheet.create({
     marginTop: 5,
     maxHeight: 200,
     elevation: 5,
-    zIndex: 9999, // ✅ ADD
+    zIndex: 9999,
   },
   item: {
     padding: 12,

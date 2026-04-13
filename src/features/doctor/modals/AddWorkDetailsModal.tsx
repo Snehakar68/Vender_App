@@ -50,17 +50,15 @@ export default function AddWorkDetailsModal({
   const [showTo, setShowTo] = useState(false);
 
   const handleChange = (key: string, value: any) => {
-  setForm((prev) => ({
-    ...prev,
-    [key]: value,
-  }));
-
-  // 🔥 REMOVE ERROR WHEN USER TYPES
-  setErrors((prev: any) => ({
-    ...prev,
-    [key]: "",
-  }));
-};
+    setForm((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+    setErrors((prev: any) => ({
+      ...prev,
+      [key]: "",
+    }));
+  };
 
   const validate = () => {
     const e: any = {};
@@ -133,9 +131,9 @@ export default function AddWorkDetailsModal({
 
       const formData = new FormData();
 
-     if (editData?.hosp_Id) {
-  formData.append("work_Id", editData.hosp_Id);
-}
+      if (editData?.hosp_Id) {
+        formData.append("work_Id", editData.hosp_Id);
+      }
 
 
       formData.append("vendor_id", doctorId);
@@ -145,7 +143,6 @@ export default function AddWorkDetailsModal({
       formData.append("OPD_To", form.opD_To);
       formData.append("Max_OPD", form.max_OPD);
 
-      // opdDays → string → split
       form.opdDays.forEach((day: string) => {
         formData.append("OPDDays", day);
       });
@@ -170,55 +167,51 @@ export default function AddWorkDetailsModal({
     }
   };
   useEffect(() => {
-  if (!open) {
-    setForm({
-      hosp_Id: "",
-      consFee: "",
-      opdDays: [],
-      slotStart: "",
-      opD_To: "",
-      max_OPD: "",
-    });
-    setErrors({});
-  }
-}, [open]);
+    if (!open) {
+      setForm({
+        hosp_Id: "",
+        consFee: "",
+        opdDays: [],
+        slotStart: "",
+        opD_To: "",
+        max_OPD: "",
+      });
+      setErrors({});
+    }
+  }, [open]);
   return (
     <Modal visible={open} transparent animationType="fade">
       <View style={styles.overlay}>
         <View style={styles.container}>
-      <ScrollView
-  showsVerticalScrollIndicator={false}
-  keyboardShouldPersistTaps="always"
-  contentContainerStyle={{ paddingBottom: 20 }}
-  scrollEnabled={!hospitalOpen && !daysOpen}   // 🔥 CRITICAL FIX
->
-
-            {/* HEADER */}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="always"
+            contentContainerStyle={{ paddingBottom: 20 }}
+            scrollEnabled={!hospitalOpen && !daysOpen}
+          >
             <View style={styles.header}>
               <Ionicons name="briefcase-outline" size={20} color="#0F172A" />
               <Text style={styles.title}>Add Work Details</Text>
             </View>
 
-            {/* FORM */}
             <Field label="Hospital" required>
 
-              {/* SELECT BOX */}
-     <TouchableOpacity
-  disabled={!!editData}
-  onPress={() => {
-    if (!editData) setHospitalOpen(!hospitalOpen);
-  }}
-             style={{
-  borderWidth: 1,
-  borderColor: "#E2E8F0",
-  borderRadius: 10,
-  padding: 12,
-  flexDirection: "row",
-  justifyContent: "space-between",
-  alignItems: "center",
-  backgroundColor: editData ? "#F1F5F9" : "#fff",   // ✅ add this
-  opacity: editData ? 0.7 : 1,                     // ✅ add this
-}}
+              <TouchableOpacity
+                disabled={!!editData}
+                onPress={() => {
+                  if (!editData) setHospitalOpen(!hospitalOpen);
+                }}
+                style={{
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                  borderRadius: 10,
+                  padding: 12,
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  backgroundColor: editData ? "#F1F5F9" : "#fff",
+                  opacity: editData ? 0.7 : 1,
+                }}
               >
                 <Text style={{ fontSize: 13 }}>
                   {form.hosp_Id
@@ -232,18 +225,16 @@ export default function AddWorkDetailsModal({
                   color="#64748B"
                 />
               </TouchableOpacity>
-
-              {/* DROPDOWN LIST */}
-        <View>
+              <View>
                 {hospitalOpen && (
-                <View
-  style={styles.dropdown}
-><ScrollView
-  style={{ maxHeight: 200 }}
-  nestedScrollEnabled
-  keyboardShouldPersistTaps="always"
-  showsVerticalScrollIndicator
->
+                  <View
+                    style={styles.dropdown}
+                  ><ScrollView
+                    style={{ maxHeight: 200 }}
+                    nestedScrollEnabled
+                    keyboardShouldPersistTaps="always"
+                    showsVerticalScrollIndicator
+                  >
                       {hospitals.map((h) => (
                         <TouchableOpacity
                           key={h.id}
@@ -270,14 +261,12 @@ export default function AddWorkDetailsModal({
               <Input
                 value={form.consFee}
                 keyboardType="numeric"
-          onChangeText={(v: string) => handleChange("consFee", v)}
+                onChangeText={(v: string) => handleChange("consFee", v)}
               />
               {errors.consFee && <Text style={{ color: "red" }}>{errors.consFee}</Text>}
             </Field>
 
             <Field label="OPD Days" required>
-
-              {/* SELECT BOX */}
               <TouchableOpacity
                 onPress={() => setDaysOpen(!daysOpen)}
                 style={styles.input}
@@ -289,7 +278,6 @@ export default function AddWorkDetailsModal({
                 </Text>
               </TouchableOpacity>
               <View style={{ position: "relative", zIndex: daysOpen ? 2000 : 1 }}>
-                {/* DROPDOWN */}
                 {daysOpen && (
                   <View style={styles.dropdown}>
                     <ScrollView
@@ -354,9 +342,9 @@ export default function AddWorkDetailsModal({
                       }}
                     />
                   )}
-                    {errors.slotStart && <Text style={styles.error}>{errors.slotStart}</Text>}
+                  {errors.slotStart && <Text style={styles.error}>{errors.slotStart}</Text>}
                 </Field>
-              
+
               </View>
 
               <View style={{ width: 10 }} />
@@ -386,9 +374,9 @@ export default function AddWorkDetailsModal({
                       }}
                     />
                   )}
-                         {errors.opD_To && <Text style={styles.error}>{errors.opD_To}</Text>}
+                  {errors.opD_To && <Text style={styles.error}>{errors.opD_To}</Text>}
                 </Field>
-         
+
               </View>
             </View>
 
@@ -398,11 +386,9 @@ export default function AddWorkDetailsModal({
                 keyboardType="numeric"
                 onChangeText={(v: string) => handleChange("max_OPD", v)}
               />
-                  {errors.max_OPD && <Text style={styles.error}>{errors.max_OPD}</Text>}
+              {errors.max_OPD && <Text style={styles.error}>{errors.max_OPD}</Text>}
             </Field>
-        
 
-            {/* ACTIONS */}
             <View style={styles.actions}>
               <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
                 <Text style={styles.cancelText}>Cancel</Text>
@@ -438,7 +424,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     maxHeight: "90%",
-    overflow: "visible",   // 🔥 ADD THIS
+    overflow: "visible",
   },
   header: {
     flexDirection: "row",
@@ -515,14 +501,14 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "600",
   },
-dropdown: {
-  marginTop: 6,
-  backgroundColor: "#fff",
-  borderRadius: 10,
-  borderWidth: 1,
-  borderColor: "#E2E8F0",
-  elevation: 5,
-},
+  dropdown: {
+    marginTop: 6,
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    elevation: 5,
+  },
   dropdownItem: {
     padding: 12,
     borderBottomWidth: 0.5,

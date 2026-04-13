@@ -1,136 +1,266 @@
-import { View, Text, ScrollView, TouchableOpacity, TextInput } from "react-native";
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  TextInput,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import AppHeader from "@/src/shared/components/AppHeader";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function Work() {
+  const [isEditing, setIsEditing] = useState(false);
+
+  const [formData, setFormData] = useState({
+    linkedType: "", // "Hospital" | "Doctor"
+    hospital: "",
+    doctor: "",
+    shift: "Morning",
+    shiftDays: "0",
+  });
+
+  const [showHospitalDropdown, setShowHospitalDropdown] = useState(false);
+  const [showDoctorDropdown, setShowDoctorDropdown] = useState(false);
+  const [showShiftDropdown, setShowShiftDropdown] = useState(false);
+
+  const hospitals = ["Apollo Hospital", "Fortis Hospital", "Manipal Hospital"];
+  const doctors = ["Dr. Sharma", "Dr. Reddy", "Dr. Mehta"];
+  const shifts = ["Morning", "Evening", "Night"];
+
+  const handleChange = (key: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+  };
+
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: "#f5f7fb" }}>
-      
-      {/* HEADER */}
-      <View style={{ padding: 20 }}>
-        <Text style={{ fontSize: 20, fontWeight: "700" , paddingTop:20}}>Work Details</Text>
-        <Text style={{ color: "gray", marginTop: 5 }}>
-          Configure professional assignment and shifts
-        </Text>
-      </View>
+    <SafeAreaView style={{ flex: 1 }}>
+      <ScrollView contentContainerStyle={styles.container}>
+        <AppHeader
+          title="Work Information"
+          subtitle="Manage your work details"
+          icon="briefcase-outline"
+          actionText={isEditing ? "Cancel" : "Edit"}
+          onActionPress={() => setIsEditing(!isEditing)}
+        />
 
-      {/* CARD */}
-      <View style={{
-        backgroundColor: "white",
-        margin: 15,
-        borderRadius: 15,
-        padding: 15,
-        elevation: 3
-      }}>
-
-        {/* STATUS */}
-        <View style={{ marginBottom: 15 }}>
-          <Text style={{ color: "gray", fontSize: 12 }}>CURRENT STATUS</Text>
-
-          <View style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginTop: 5
-          }}>
+        <View style={styles.card}>
+          {/* STATUS */}
+          <View style={styles.rowBetween}>
+            <Text style={styles.label}>Current Status</Text>
             <Text style={{ color: "red", fontWeight: "600" }}>● Inactive</Text>
-
-            <TouchableOpacity style={{
-              backgroundColor: "#0f766e",
-              paddingHorizontal: 15,
-              paddingVertical: 6,
-              borderRadius: 20
-            }}>
-              <Text style={{ color: "white" }}>Approve</Text>
-            </TouchableOpacity>
           </View>
-        </View>
 
-        {/* LINKED DOCTOR */}
-        <View style={{ marginBottom: 15 }}>
-          <Text style={{ color: "gray", fontSize: 12 }}>IS LINKED DOCTOR*</Text>
+          {/* LINK TYPE */}
+          <Text style={styles.label}>Linked Type</Text>
+          <View style={styles.row}>
+            {["Hospital", "Doctor"].map((type) => (
+              <TouchableOpacity
+                key={type}
+                disabled={!isEditing}
+                style={[
+                  styles.optionBtn,
+                  formData.linkedType === type && styles.activeOption,
+                ]}
+                onPress={() => {
+                  handleChange("linkedType", type);
 
-          <View style={{
-            backgroundColor: "#f1f5f9",
-            padding: 12,
-            borderRadius: 10,
-            marginTop: 5,
-            flexDirection: "row",
-            justifyContent: "space-between"
-          }}>
-            <Text>Yes</Text>
+                  // reset other field
+                  if (type === "Hospital") {
+                    handleChange("doctor", "");
+                  } else {
+                    handleChange("hospital", "");
+                  }
+                }}
+              >
+                <Text
+                  style={
+                    formData.linkedType === type
+                      ? styles.activeText
+                      : styles.optionText
+                  }
+                >
+                  {type}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* HOSPITAL */}
+          {formData.linkedType === "Hospital" && (
+            <>
+              <Text style={styles.label}>Select Hospital</Text>
+              <TouchableOpacity
+                style={styles.input}
+                disabled={!isEditing}
+                onPress={() =>
+                  isEditing && setShowHospitalDropdown(!showHospitalDropdown)
+                }
+              >
+                <Text>{formData.hospital || "Select Hospital"}</Text>
+                <Ionicons name="chevron-down" size={18} />
+              </TouchableOpacity>
+
+              {showHospitalDropdown &&
+                hospitals.map((h) => (
+                  <TouchableOpacity
+                    key={h}
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      handleChange("hospital", h);
+                      setShowHospitalDropdown(false);
+                    }}
+                  >
+                    <Text>{h}</Text>
+                  </TouchableOpacity>
+                ))}
+            </>
+          )}
+
+          {/* DOCTOR */}
+          {formData.linkedType === "Doctor" && (
+            <>
+              <Text style={styles.label}>Select Doctor</Text>
+              <TouchableOpacity
+                style={styles.input}
+                disabled={!isEditing}
+                onPress={() =>
+                  isEditing && setShowDoctorDropdown(!showDoctorDropdown)
+                }
+              >
+                <Text>{formData.doctor || "Select Doctor"}</Text>
+                <Ionicons name="chevron-down" size={18} />
+              </TouchableOpacity>
+
+              {showDoctorDropdown &&
+                doctors.map((d) => (
+                  <TouchableOpacity
+                    key={d}
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      handleChange("doctor", d);
+                      setShowDoctorDropdown(false);
+                    }}
+                  >
+                    <Text>{d}</Text>
+                  </TouchableOpacity>
+                ))}
+            </>
+          )}
+
+          {/* SHIFT */}
+          <Text style={styles.label}>Shift</Text>
+          <TouchableOpacity
+            style={styles.input}
+            disabled={!isEditing}
+            onPress={() =>
+              isEditing && setShowShiftDropdown(!showShiftDropdown)
+            }
+          >
+            <Text>{formData.shift}</Text>
             <Ionicons name="chevron-down" size={18} />
-          </View>
+          </TouchableOpacity>
+
+          {showShiftDropdown &&
+            shifts.map((s) => (
+              <TouchableOpacity
+                key={s}
+                style={styles.dropdownItem}
+                onPress={() => {
+                  handleChange("shift", s);
+                  setShowShiftDropdown(false);
+                }}
+              >
+                <Text>{s}</Text>
+              </TouchableOpacity>
+            ))}
+
+          {/* SHIFT DAYS */}
+          <Text style={styles.label}>Shift Change Days</Text>
+          <TextInput
+            style={styles.input}
+            value={formData.shiftDays}
+            editable={isEditing}
+            keyboardType="numeric"
+            onChangeText={(t) => handleChange("shiftDays", t)}
+          />
         </View>
 
-        {/* DOCTOR */}
-        <View style={{ marginBottom: 15 }}>
-          <Text style={{ color: "gray", fontSize: 12 }}>DOCTOR*</Text>
-
-          <View style={{
-            backgroundColor: "#f1f5f9",
-            padding: 12,
-            borderRadius: 10,
-            marginTop: 5
-          }}>
-            <Text>Doctor_del, undefined, Mumbai - MH</Text>
-          </View>
-        </View>
-
-        {/* SHIFT + DAYS */}
-        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-          
-          <View style={{ flex: 1, marginRight: 10 }}>
-            <Text style={{ color: "gray", fontSize: 12 }}>SHIFT</Text>
-
-            <View style={{
-              backgroundColor: "#f1f5f9",
-              padding: 12,
-              borderRadius: 10,
-              marginTop: 5,
-              flexDirection: "row",
-              justifyContent: "space-between"
-            }}>
-              <Text>Morning</Text>
-              <Ionicons name="sunny" size={18} />
-            </View>
-          </View>
-
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: "gray", fontSize: 12 }}>SHIFT CHANGE DAYS</Text>
-
-            <View style={{
-              backgroundColor: "#f1f5f9",
-              padding: 12,
-              borderRadius: 10,
-              marginTop: 5,
-              alignItems: "center"
-            }}>
-              <Text>0</Text>
-            </View>
-          </View>
-
-        </View>
-
-      </View>
-
-      {/* SAVE BUTTON */}
-      <View style={{ padding: 15 }}>
-        <TouchableOpacity style={{
-          backgroundColor: "#0f766e",
-          padding: 15,
-          borderRadius: 12,
-          alignItems: "center"
-        }}>
-          <Text style={{ color: "white", fontWeight: "600" }}>
-            💾 Save Changes
-          </Text>
-        </TouchableOpacity>
-
-        <Text style={{ textAlign: "center", marginTop: 10, color: "gray", fontSize: 12 }}>
-          Last modified: Oct 24, 2023
-        </Text>
-      </View>
-
-    </ScrollView>
+        {/* SAVE */}
+        {isEditing && (
+          <TouchableOpacity style={styles.saveBtn}>
+            <Text style={styles.saveText}>Save Changes</Text>
+          </TouchableOpacity>
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flexGrow: 1,
+    backgroundColor: "#F1F5F9",
+    padding: 16,
+  },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    padding: 16,
+  },
+  label: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  input: {
+    backgroundColor: "#F8FAFC",
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 4,
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  dropdownItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderColor: "#eee",
+  },
+  saveBtn: {
+    backgroundColor: "#0F766E",
+    padding: 16,
+    borderRadius: 14,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  saveText: {
+    color: "#fff",
+    fontWeight: "600",
+  },
+  row: {
+    flexDirection: "row",
+    marginTop: 6,
+  },
+  optionBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: "#E2E8F0",
+    marginRight: 10,
+  },
+  activeOption: {
+    backgroundColor: "#0F766E",
+  },
+  optionText: {
+    color: "#000",
+  },
+  activeText: {
+    color: "#fff",
+  },
+  rowBetween: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+});

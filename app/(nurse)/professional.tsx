@@ -1,169 +1,426 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
+  TextInput,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import AppHeader from "@/src/shared/components/AppHeader";
+import { SafeAreaView } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as DocumentPicker from "expo-document-picker";
+
+type ErrorType = {
+  qualification?: string;
+  experience?: string;
+  regNumber?: string;
+  department?: string;
+  regDate?: string;
+};
+
+type FileType = {
+  uri: string;
+  name: string;
+  type: string;
+} | null;
 
 export default function Professional() {
+  const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [vendorId, setVendorId] = useState<string | null>(null);
+
+  const [departments, setDepartments] = useState<
+    { id: number; depName: string }[]
+  >([]);
+
+  const [file, setFile] = useState<FileType>(null);
+
+  const [showDepartment, setShowDepartment] = useState(false);
+  const [showQualification, setShowQualification] = useState(false);
+
+  const qualifications = ["ANM", "GNM", "BSC Nursing"];
+
+  const [formData, setFormData] = useState({
+    qualification: "",
+    experience: "",
+    regNumber: "",
+    department: 0,
+    regDate: "",
+  });
+
+  const [originalData, setOriginalData] = useState(formData);
+  const [errors, setErrors] = useState<ErrorType>({});
+
+  /* INIT */
+  useEffect(() => {
+    const init = async () => {
+      const id = await AsyncStorage.getItem("vendorId");
+      if (!id) return;
+
+      setVendorId(id);
+      fetchData(id);
+      fetchDepartments();
+    };
+
+    init();
+  }, []);
+
+  const fetchData = async (id: string) => {
+    try {
+      setLoading(true);
+
+      const res = await fetch(
+        `https://coreapi-service-111763741518.asia-south1.run.app/api/Nurse/GetNurseById/${id}`
+      );
+      const data = await res.json();
+
+      const formatted = {
+        qualification: data.qualification || "",
+        experience: data.exp ? String(data.exp) : "",
+        regNumber: data.registrationNo || "",
+        department: data.dep_id || 0,
+        regDate: data.registrationDate || "",
+      };
+
+      setFormData(formatted);
+      setOriginalData(formatted);
+    } catch (err) {
+      console.log(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchDepartments = async () => {
+    try {
+      const res = await fetch(
+        "https://coreapi-service-111763741518.asia-south1.run.app/api/Nurse/GetNurseDepartments"
+      );
+      const data = await res.json();
+      setDepartments(data);
+    } catch (err) {
+      console.log(err);
+    }
+  };
+
+  /* FILE PICK */
+  const pickFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["application/pdf", "image/*"],
+      });
+
+      if (result.canceled) return;
+
+      const asset = result.assets?.[0];
+      if (!asset) return;
+
+      setFile({
+        uri: asset.uri,
+        name: asset.name || "file",
+        type: asset.mimeType || "application/octet-stream",
+      });
+    } catch (err) {
+      console.log(err);
+    }
+  };
+
+  /* EDIT */
+  const handleEdit = () => setIsEditing(true);
+
+  const handleCancel = () => {
+    setFormData(originalData);
+    setErrors({});
+    setFile(null);
+    setIsEditing(false);
+  };
+
+  const handleChange = (key: string, value: any) => {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+    setErrors((prev) => ({ ...prev, [key]: "" }));
+  };
+
+  /* VALIDATION */
+  const validate = () => {
+    const newErrors: ErrorType = {};
+
+    if (!formData.qualification)
+      newErrors.qualification = "Qualification required";
+
+    if (!formData.experience || isNaN(Number(formData.experience)))
+      newErrors.experience = "Valid experience required";
+
+    if (!formData.regNumber)
+      newErrors.regNumber = "Registration number required";
+
+    if (!formData.department || formData.department === 0)
+      newErrors.department = "Department required";
+
+    if (!formData.regDate)
+      newErrors.regDate = "Date required";
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const formatDate = (date: string) => {
+    if (!date) return "";
+    if (date.includes("-")) return date;
+
+    const [d, m, y] = date.split("/");
+    return `${y}-${m}-${d}`;
+  };
+
+  /* SAVE */
+  const handleSave = async () => {
+    if (!validate()) return;
+
+    try {
+      if (!vendorId) return;
+
+      setLoading(true);
+
+      const form = new FormData();
+
+      form.append("vendor_id", vendorId);
+      form.append("digree", formData.qualification);
+      form.append("exp", formData.experience);
+      form.append("Dep_id", String(formData.department));
+      form.append("registrationNo", formData.regNumber);
+      form.append("registrationDate", formatDate(formData.regDate));
+
+      if (file) {
+        form.append("license", file as any);
+      }
+
+      const res = await fetch(
+        "https://coreapi-service-111763741518.asia-south1.run.app/api/Nurse/UpdateNurProfessionalInfo",
+        {
+          method: "PUT",
+          body: form,
+        }
+      );
+
+      const json = await res.json();
+      console.log(json);
+
+      if (json?.status) {
+        alert("Data Saved")
+        setIsEditing(false);
+        fetchData(vendorId);
+      }
+    } catch (err) {
+      console.log(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center" }}>
+        <ActivityIndicator size="large" color="#0F766E" />
+      </View>
+    );
+  }
+
   return (
-    <ScrollView style={styles.container}>
+    <SafeAreaView style={{ flex: 1 }}>
+      <ScrollView contentContainerStyle={styles.container}>
+        <AppHeader
+          title="Professional Information"
+          subtitle="Manage your professional details"
+          icon="briefcase-outline"
+          actionText={isEditing ? "Cancel" : "Edit"}
+          onActionPress={isEditing ? handleCancel : handleEdit}
+        />
 
-      {/* HEADER CARD */}
-      <View style={styles.headerCard}>
-        <Text style={styles.headerTitle}>Professional Profile</Text>
-        <Text style={styles.headerSubtitle}>
-          Verify and manage your credentials
-        </Text>
-      </View>
-
-      {/* FORM CARD */}
-      <View style={styles.card}>
-
-        {/* QUALIFICATION */}
-        <Text style={styles.label}>QUALIFICATION</Text>
-        <View style={styles.inputBox}>
-          <Text>ANM</Text>
-          <Ionicons name="chevron-down" size={18} />
-        </View>
-
-        {/* EXPERIENCE */}
-        <Text style={styles.label}>EXPERIENCE (YEAR)</Text>
-        <View style={styles.inputBox}>
-          <Text>99</Text>
-        </View>
-
-        {/* REGISTRATION NUMBER */}
-        <Text style={styles.label}>REGISTRATION NUMBER</Text>
-        <View style={styles.inputBox}>
-          <Text>3234324sdfsd</Text>
-        </View>
-
-        {/* DEPARTMENT */}
-        <Text style={styles.label}>DEPARTMENT</Text>
-        <View style={styles.inputBox}>
-          <Text>Palliative Care / Hospice</Text>
-          <Ionicons name="chevron-down" size={18} />
-        </View>
-
-        {/* REGISTRATION DATE */}
-        <Text style={styles.label}>REGISTRATION DATE</Text>
-        <View style={styles.inputBox}>
-          <Text>03/10/2026</Text>
-          <Ionicons name="calendar-outline" size={18} />
-        </View>
-
-        {/* CERTIFICATE */}
-        <Text style={styles.label}>REGISTRATION CERTIFICATE</Text>
-        <View style={styles.certificateBox}>
-          <Ionicons name="document-text" size={30} color="#0f766e" />
-          <Text style={styles.certificateText}>
-            Verified Certificate Attached
-          </Text>
-
-          <TouchableOpacity>
-            <Text style={styles.linkText}>
-              View Registration Certificate
-            </Text>
+        <View style={styles.card}>
+          {/* Qualification */}
+          <Text style={styles.label}>Qualification *</Text>
+          <TouchableOpacity
+            style={[styles.input, errors.qualification && styles.errorBorder]}
+            onPress={() => isEditing && setShowQualification(!showQualification)}
+          >
+            <Text>{formData.qualification || "Select"}</Text>
+            <Ionicons name="chevron-down" size={18} />
           </TouchableOpacity>
+          {errors.qualification && (
+            <Text style={styles.errorText}>{errors.qualification}</Text>
+          )}
+
+          {showQualification &&
+            qualifications.map((q) => (
+              <TouchableOpacity
+                key={q}
+                style={styles.dropdownItem}
+                onPress={() => {
+                  handleChange("qualification", q);
+                  setShowQualification(false);
+                }}
+              >
+                <Text>{q}</Text>
+              </TouchableOpacity>
+            ))}
+
+          {/* Experience */}
+          <Text style={styles.label}>Experience *</Text>
+          <TextInput
+            style={[styles.input, errors.experience && styles.errorBorder]}
+            value={formData.experience}
+            editable={isEditing}
+            keyboardType="numeric"
+            onChangeText={(t) => handleChange("experience", t)}
+          />
+          {errors.experience && (
+            <Text style={styles.errorText}>{errors.experience}</Text>
+          )}
+
+          {/* Registration Number */}
+          <Text style={styles.label}>Registration Number *</Text>
+          <TextInput
+            style={[styles.input, errors.regNumber && styles.errorBorder]}
+            value={formData.regNumber}
+            editable={isEditing}
+            onChangeText={(t) => handleChange("regNumber", t)}
+          />
+          {errors.regNumber && (
+            <Text style={styles.errorText}>{errors.regNumber}</Text>
+          )}
+
+          {/* Date */}
+          <Text style={styles.label}>Registration Date *</Text>
+          <TextInput
+            style={[styles.input, errors.regDate && styles.errorBorder]}
+            value={formData.regDate}
+            editable={isEditing}
+            placeholder="DD/MM/YYYY"
+            onChangeText={(t) => handleChange("regDate", t)}
+          />
+          {errors.regDate && (
+            <Text style={styles.errorText}>{errors.regDate}</Text>
+          )}
+
+          {/* Department */}
+          <Text style={styles.label}>Department *</Text>
+          <TouchableOpacity
+            style={[styles.input, errors.department && styles.errorBorder]}
+            onPress={() => isEditing && setShowDepartment(!showDepartment)}
+          >
+            <Text>
+              {departments.find(
+                (d) => d.id === Number(formData.department)
+              )?.depName || "Select"}
+            </Text>
+            <Ionicons name="chevron-down" size={18} />
+          </TouchableOpacity>
+          {errors.department && (
+            <Text style={styles.errorText}>{errors.department}</Text>
+          )}
+
+          {showDepartment &&
+            departments.map((d) => (
+              <TouchableOpacity
+                key={d.id}
+                style={styles.dropdownItem}
+                onPress={() => {
+                  handleChange("department", d.id);
+                  setShowDepartment(false);
+                }}
+              >
+                <Text>{d.depName}</Text>
+              </TouchableOpacity>
+            ))}
+
+          {/* CERTIFICATE */}
+         {/* CERTIFICATE */}
+<Text style={styles.label}>Registration Certificate</Text>
+
+{!isEditing ? (
+  /* 👉 VIEW MODE (when editing ON) */
+  <TouchableOpacity style={styles.docBox}>
+    <Ionicons name="document-text-outline" size={24} color="#0F766E" />
+    <Text style={{ marginTop: 5 }}>View Certificate</Text>
+  </TouchableOpacity>
+) : (
+  /* 👉 UPLOAD MODE (when NOT editing) */
+  <TouchableOpacity style={styles.docBox} onPress={pickFile}>
+    <Ionicons name="cloud-upload-outline" size={24} color="#0F766E" />
+    <Text style={{ marginTop: 5 }}>
+      {file ? file.name : "Upload Certificate"}
+    </Text>
+  </TouchableOpacity>
+)}
         </View>
 
-      </View>
-
-      {/* SAVE BUTTON */}
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.saveButton}>
-          <Text style={styles.saveText}>Save Changes</Text>
-        </TouchableOpacity>
-      </View>
-
-    </ScrollView>
+        {isEditing && (
+          <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+            <Text style={styles.saveText}>Save Changes</Text>
+          </TouchableOpacity>
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: "#f5f7fb",
+    flexGrow: 1,
+    backgroundColor: "#F1F5F9",
+    padding: 16,
   },
-
-  headerCard: {
-    backgroundColor: "#0f766e",
-    margin: 15,
-    borderRadius: 20,
-    padding: 20,
-  },
-
-  headerTitle: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-
-  headerSubtitle: {
-    color: "#ccfbf1",
-    marginTop: 5,
-  },
-
   card: {
-    backgroundColor: "white",
-    marginHorizontal: 15,
-    borderRadius: 15,
-    padding: 15,
-    elevation: 3,
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    padding: 16,
   },
-
   label: {
-    fontSize: 12,
-    color: "gray",
-    marginTop: 15,
-    marginBottom: 5,
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 10,
   },
-
-  inputBox: {
-    backgroundColor: "#f1f5f9",
+  input: {
+    backgroundColor: "#F8FAFC",
     padding: 12,
     borderRadius: 10,
+    marginTop: 4,
     flexDirection: "row",
     justifyContent: "space-between",
+  },
+  dropdownItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderColor: "#eee",
+  },
+  saveBtn: {
+    backgroundColor: "#0F766E",
+    padding: 16,
+    borderRadius: 14,
     alignItems: "center",
-  },
-
-  certificateBox: {
-    backgroundColor: "#f1f5f9",
-    borderRadius: 12,
-    padding: 20,
-    alignItems: "center",
-    marginTop: 5,
-  },
-
-  certificateText: {
-    marginTop: 5,
-    color: "gray",
-  },
-
-  linkText: {
-    color: "#0f766e",
     marginTop: 10,
-    fontWeight: "600",
   },
-
-  buttonContainer: {
-    padding: 15,
-  },
-
-  saveButton: {
-    backgroundColor: "#0f766e",
-    padding: 15,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-
   saveText: {
-    color: "white",
+    color: "#fff",
     fontWeight: "600",
+  },
+  errorBorder: {
+    borderWidth: 1,
+    borderColor: "red",
+  },
+  errorText: {
+    color: "red",
+    fontSize: 12,
+    marginTop: 2,
+  },
+  docBox: {
+    backgroundColor: "#F8FAFC",
+    padding: 16,
+    borderRadius: 10,
+    alignItems: "center",
+    marginTop: 6,
   },
 });

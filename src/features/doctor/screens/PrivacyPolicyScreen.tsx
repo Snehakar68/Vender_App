@@ -1,12 +1,32 @@
+import { useEffect, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function PrivacyPolicyScreen() {
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, []);
+  if (loading) {
+    return (
+      <View style={{ flex: 1 }}>
+        <View style={styles.loader}>
+          <ActivityIndicator size="large" color="#0F766E" />
+          <Text style={styles.loaderText}>Loading policy...</Text>
+        </View>
+      </View>
+    );
+  }
   return (
     <SafeAreaView style={{ flex: 1 }}>
       <ScrollView
@@ -14,7 +34,6 @@ export default function PrivacyPolicyScreen() {
         showsVerticalScrollIndicator={false}
       >
 
-        {/* HEADER */}
         <View style={styles.header}>
           <Text style={styles.title}>Privacy Policy</Text>
           <Text style={styles.subtitle}>
@@ -22,7 +41,7 @@ export default function PrivacyPolicyScreen() {
           </Text>
         </View>
 
-        {/* CARD */}
+
         <View style={styles.card}>
 
           <Section
@@ -57,7 +76,6 @@ export default function PrivacyPolicyScreen() {
 
         </View>
 
-        {/* FOOTER */}
         <Text style={styles.footer}>
           Last updated: February 2026
         </Text>
@@ -82,7 +100,18 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "700",
   },
+  loader: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+  },
 
+  loaderText: {
+    marginTop: 10,
+    fontSize: 13,
+    color: "#64748B",
+  },
   subtitle: {
     fontSize: 13,
     color: "#64748B",

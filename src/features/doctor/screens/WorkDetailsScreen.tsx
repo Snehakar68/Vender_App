@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   StatusBar,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import AppHeader from "@/src/shared/components/AppHeader";
 import { useEffect, useState } from "react";
 import AddWorkDetailsModal from "../modals/AddWorkDetailsModal";
@@ -23,7 +22,6 @@ export default function WorkDetailsScreen() {
   const [deleting, setDeleting] = useState(false);
   const [editData, setEditData] = useState<any>(null);
 
-  // 🔥 TODO: replace with actual doctorId from auth/storage
   const auth = useContext(AuthContext);
   const doctorId = auth?.user?.vendorId ?? "";
 
@@ -66,7 +64,6 @@ export default function WorkDetailsScreen() {
       ? `${hosp.name}, ${hosp.city}`
       : id;
   };
-  // ✅ Loading state
   if (loading) {
     return (
       <View style={styles.loader}>
@@ -77,7 +74,6 @@ export default function WorkDetailsScreen() {
   }
   return (
     <View style={{ flex: 1 }}>
-      {/* HEADER */}
       <View style={styles.headerWrapper}>
         <AppHeader
           title="Work Details"
@@ -88,14 +84,13 @@ export default function WorkDetailsScreen() {
         />
       </View>
 
-      {/* MODAL */}
       <AddWorkDetailsModal
         open={open}
         editData={editData}
         doctorId={doctorId}
         onClose={() => {
           setOpen(false);
-          setEditData(null); // 🔥 reset
+          setEditData(null);
         }}
         onSuccess={() => {
           setOpen(false);
@@ -103,7 +98,6 @@ export default function WorkDetailsScreen() {
           fetchData();
         }}
       />
-      {/* EMPTY STATE */}
       {!data.length ? (
         <View style={styles.empty}>
           <View style={{ alignItems: "center" }}>
@@ -121,7 +115,7 @@ export default function WorkDetailsScreen() {
         >
           {data.map((item) => (
             <View key={item.hosp_Id} style={styles.card}>
-              {/* TOP */}
+
               <View style={styles.topRow}>
                 <Text style={styles.title}>
                   {getHospitalName(item.hosp_Id)}
@@ -143,7 +137,6 @@ export default function WorkDetailsScreen() {
                 </View>
               </View>
 
-              {/* DETAILS */}
               <View style={styles.grid}>
                 <Info label="OPD Days" value={item.opD_Days} />
 
@@ -162,17 +155,9 @@ export default function WorkDetailsScreen() {
                   value={`${item.max_OPD} patients`}
                 />
               </View>
-
-              {/* ACTIONS */}
               <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-
-                {/* LEFT: EDIT + DELETE */}
                 <View style={{ flexDirection: "row", gap: 16 }}>
-
-                  {/* EDIT */}
                   <View style={styles.actionGroup}>
-
-                    {/* EDIT */}
                     <TouchableOpacity
                       style={styles.editBtnIcon}
                       onPress={() => {
@@ -183,8 +168,6 @@ export default function WorkDetailsScreen() {
                     >
                       <Ionicons name="create-outline" size={18} color="#2563EB" />
                     </TouchableOpacity>
-
-                    {/* DELETE */}
                     <TouchableOpacity
                       style={styles.deleteBtnIcon}
                       onPress={() => setDeleteModal(item)}
@@ -196,8 +179,6 @@ export default function WorkDetailsScreen() {
                   </View>
 
                 </View>
-
-                {/* RIGHT: APPROVE */}
                 <View style={{ minWidth: 90, alignItems: "flex-end" }}>
 
                   {item.is_approved === "Y" ? (
@@ -277,11 +258,9 @@ export default function WorkDetailsScreen() {
           </View>
         </View>
       )}
-     </View>
+    </View>
   );
 }
-
-/* ================= STYLES ================= */
 
 const styles = StyleSheet.create({
   container: {
@@ -290,28 +269,28 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 40,
   },
-headerWrapper: {
-  backgroundColor: "#fff",
+  headerWrapper: {
+    backgroundColor: "#fff",
 
-  paddingTop: StatusBar.currentHeight || 0, // ✅ THIS FIXES IT
+    paddingTop: StatusBar.currentHeight || 0,
 
-  borderBottomWidth: 0.5,
-  borderColor: "#E2E8F0",
+    borderBottomWidth: 0.5,
+    borderColor: "#E2E8F0",
 
-  elevation: 3,
-  zIndex: 10,
+    elevation: 3,
+    zIndex: 10,
 
-  shadowColor: "#000",
-  shadowOpacity: 0.05,
-  shadowRadius: 4,
-  shadowOffset: { width: 0, height: 2 },
-},
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
 
   loader: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#F8FAFC", // match app bg
+    backgroundColor: "#F8FAFC",
   },
 
   loaderText: {
@@ -473,14 +452,12 @@ headerWrapper: {
     backgroundColor: "#fff",
     padding: 20,
     borderRadius: 16,
-
-    // 🔥 better elevation
     shadowColor: "#000",
     shadowOpacity: 0.15,
     shadowRadius: 10,
     elevation: 10,
 
-    alignItems: "center", // center content
+    alignItems: "center",
   },
 
   cancelBtn: {
@@ -508,7 +485,7 @@ headerWrapper: {
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: "#EFF6FF", // light blue
+    backgroundColor: "#EFF6FF",
 
     justifyContent: "center",
     alignItems: "center",
@@ -521,7 +498,7 @@ headerWrapper: {
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: "#FEF2F2", // light red
+    backgroundColor: "#FEF2F2",
 
     justifyContent: "center",
     alignItems: "center",
@@ -531,7 +508,6 @@ headerWrapper: {
   },
 });
 
-/* ================= COMPONENTS ================= */
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.infoBox}>

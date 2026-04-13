@@ -4,8 +4,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { getUserData } from "@/src/utils/tokenStorage";
 import { useEffect, useState } from "react";
@@ -13,45 +13,88 @@ import { Image } from "react-native";
 
 export default function HomeScreen() {
   const [userName, setUserName] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+
+    if (hour < 12) return "Good Morning";
+    if (hour < 17) return "Good Afternoon";
+    return "Good Evening";
+  };
+
+  const getIcon = () => {
+    const hour = new Date().getHours();
+
+    if (hour < 12) return "sunny-outline";
+    if (hour < 17) return "partly-sunny-outline";
+    return "moon-outline";
+  };
   useEffect(() => {
     const loadUser = async () => {
-      const user = await getUserData();
-      setUserName(user?.name || "User");
+      try {
+        setLoading(true);
+
+        const user = await getUserData();
+        setUserName(user?.name || "User");
+
+      } catch (e) {
+        console.log("User load error:", e);
+      } finally {
+        setLoading(false);
+      }
     };
 
     loadUser();
   }, []);
+  if (loading) {
+    return (
+      <View style={{ flex: 1 }}>
+        <View style={styles.topHeader}>
+          <View style={styles.logoContainer}>
+            <Image
+              source={require("@/src/assets/images/logo.png")}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={styles.companyName}>JHILMIL Homecare</Text>
+          </View>
+        </View>
+
+        <View style={styles.loader}>
+          <ActivityIndicator size="large" color="#0F766E" />
+          <Text style={styles.loaderText}>Loading dashboard...</Text>
+        </View>
+      </View>
+    );
+  }
   return (
-<View style={{ flex: 1 }}>
-  {/* 🔥 FIXED HEADER */}
-  <View style={styles.topHeader}>
-    <View style={styles.logoContainer}>
-      <Image
-        source={require("@/src/assets/images/logo.png")}
-        style={styles.logo}
-        resizeMode="contain"
-      />
-      <Text style={styles.companyName}>Jhilmil Homecare</Text>
-    </View>
-  </View>
+    <View style={{ flex: 1 }}>
+      <View style={styles.topHeader}>
+        <View style={styles.logoContainer}>
+          <Image
+            source={require("@/src/assets/images/logo.png")}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Text style={styles.companyName}>Jhilmil Homecare</Text>
+        </View>
+      </View>
 
-  {/* 🔽 SCROLLABLE CONTENT */}
-  <ScrollView
-    contentContainerStyle={styles.container}
-    showsVerticalScrollIndicator={false}
-  >
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+      >
 
-        {/* HEADER */}
-   <View style={styles.greetingCard}>
-  <View>
-    <Text style={styles.greetingSmall}>Good Morning</Text>
-    <Text style={styles.greetingName}>{userName}</Text>
-  </View>
+        <View style={styles.greetingCard}>
+          <View>
+            <Text style={styles.greetingSmall}>{getGreeting()}</Text>
+            <Text style={styles.greetingName}>{userName}</Text>
+          </View>
 
-  <Ionicons name="sunny-outline" size={28} color="#0F766E" />
-</View>
+          <Ionicons name={getIcon()} size={28} color="#0F766E" />
+        </View>
 
-        {/* ALERT */}
         <TouchableOpacity style={styles.alertBox}>
           <Ionicons name="warning-outline" size={18} color="#B91C1C" />
           <View style={{ marginLeft: 8 }}>
@@ -60,23 +103,20 @@ export default function HomeScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* STATS */}
         <View style={styles.row}>
           <StatCard number="8" label="Upcoming" icon="calendar-outline" />
-<StatCard number="3" label="Patients" icon="people-outline" />
+          <StatCard number="3" label="Patients" icon="people-outline" />
         </View>
 
-        {/* TASKS */}
-  <View style={styles.taskCardNew}>
-  <View>
-    <Text style={styles.taskTitleNew}>Today's Tasks</Text>
-    <Text style={styles.taskCountNew}>5 Pending Tasks</Text>
-  </View>
+        <View style={styles.taskCardNew}>
+          <View>
+            <Text style={styles.taskTitleNew}>Today's Tasks</Text>
+            <Text style={styles.taskCountNew}>5 Pending Tasks</Text>
+          </View>
 
-  <Ionicons name="arrow-forward" size={20} color="#fff" />
-</View>
+          <Ionicons name="arrow-forward" size={20} color="#fff" />
+        </View>
 
-        {/* UPCOMING CARE */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Upcoming Care</Text>
           <Text style={styles.viewAll}>View All</Text>
@@ -84,27 +124,25 @@ export default function HomeScreen() {
 
         {["Martin Peterson", "Dorothy Chambers", "Sarah Mitchell"].map(
           (name, i) => (
-       <View key={i} style={styles.careCardNew}>
-  <View style={styles.timeBadge}>
-    <Text style={styles.timeText}>10:00</Text>
-  </View>
+            <View key={i} style={styles.careCardNew}>
+              <View style={styles.timeBadge}>
+                <Text style={styles.timeText}>10:00</Text>
+              </View>
 
-  <View style={{ flex: 1 }}>
-    <Text style={styles.patientName}>{name}</Text>
-    <Text style={styles.patientSub}>Follow-up Visit</Text>
-  </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.patientName}>{name}</Text>
+                <Text style={styles.patientSub}>Follow-up Visit</Text>
+              </View>
 
-  <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
-</View>
+              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+            </View>
           )
         )}
 
-        {/* PRESCRIPTION */}
         <View style={styles.prescriptionCard}>
           <Text style={styles.prescriptionTitle}>42 Refills Pending</Text>
         </View>
 
-        {/* PORTFOLIO */}
         <Text style={styles.sectionTitle}>Patient Portfolio</Text>
         <View style={styles.row}>
           {["Sarah Mitchell", "Martin Peterson"].map((name, i) => (
@@ -119,7 +157,6 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        {/* EVENING */}
         <Text style={styles.sectionTitle}>Evening Schedule</Text>
         {["Adam Parker", "Karen Green"].map((name, i) => (
           <View key={i} style={styles.scheduleItem}>
@@ -130,7 +167,7 @@ export default function HomeScreen() {
         ))}
 
       </ScrollView>
-   </View>
+    </View>
   );
 }
 const styles = StyleSheet.create({
@@ -140,80 +177,91 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 40,
   },
-greetingCard: {
-  backgroundColor: "#fff",
-  padding: 16,
-  borderRadius: 16,
-  marginBottom: 14,
-  flexDirection: "row",
-  justifyContent: "space-between",
-  alignItems: "center",
-  elevation: 2,
-},
+  greetingCard: {
+    backgroundColor: "#fff",
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 14,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    elevation: 2,
+  },
 
-greetingSmall: {
-  fontSize: 12,
-  color: "#64748B",
-},
+  greetingSmall: {
+    fontSize: 12,
+    color: "#64748B",
+  },
+  loader: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+  },
 
-greetingName: {
-  fontSize: 20,
-  fontWeight: "700",
-  color: "#0F172A",
-},
+  loaderText: {
+    marginTop: 10,
+    fontSize: 13,
+    color: "#64748B",
+  },
+  greetingName: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
 
-statCard: {
-  backgroundColor: "#fff",
-  width: "48%",
-  padding: 16,
-  borderRadius: 16,
-  elevation: 2,
-  gap: 6,
-},
+  statCard: {
+    backgroundColor: "#fff",
+    width: "48%",
+    padding: 16,
+    borderRadius: 16,
+    elevation: 2,
+    gap: 6,
+  },
 
-taskCardNew: {
-  backgroundColor: "#0F766E",
-  padding: 18,
-  borderRadius: 16,
-  flexDirection: "row",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: 14,
-},
+  taskCardNew: {
+    backgroundColor: "#0F766E",
+    padding: 18,
+    borderRadius: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+  },
 
-taskTitleNew: {
-  color: "#D1FAE5",
-  fontSize: 12,
-},
+  taskTitleNew: {
+    color: "#D1FAE5",
+    fontSize: 12,
+  },
 
-taskCountNew: {
-  color: "#fff",
-  fontSize: 18,
-  fontWeight: "700",
-},
+  taskCountNew: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "700",
+  },
 
-careCardNew: {
-  flexDirection: "row",
-  backgroundColor: "#fff",
-  padding: 14,
-  borderRadius: 14,
-  alignItems: "center",
-  marginBottom: 10,
-  elevation: 1,
-},
+  careCardNew: {
+    flexDirection: "row",
+    backgroundColor: "#fff",
+    padding: 14,
+    borderRadius: 14,
+    alignItems: "center",
+    marginBottom: 10,
+    elevation: 1,
+  },
 
-timeBadge: {
-  backgroundColor: "#E0F2FE",
-  padding: 8,
-  borderRadius: 10,
-  marginRight: 10,
-},
+  timeBadge: {
+    backgroundColor: "#E0F2FE",
+    padding: 8,
+    borderRadius: 10,
+    marginRight: 10,
+  },
 
-timeText: {
-  fontSize: 11,
-  color: "#0284C7",
-  fontWeight: "600",
-},
+  timeText: {
+    fontSize: 11,
+    color: "#0284C7",
+    fontWeight: "600",
+  },
   header: {
     marginBottom: 16,
   },
@@ -273,37 +321,36 @@ timeText: {
     borderRadius: 14,
     marginBottom: 14,
   },
-topHeader: {
-  backgroundColor: "#FFFFFF",
-  paddingHorizontal: 16,
-  paddingTop: 40, // 🔥 IMPORTANT (status bar space)
-  paddingBottom: 12,
-  borderBottomWidth: 1,
-  borderBottomColor: "#E5E7EB",
+  topHeader: {
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 16,
+    paddingTop: 40,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
 
-  shadowColor: "#000",
-  shadowOpacity: 0.05,
-  shadowRadius: 4,
-  elevation: 3,
-},
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 3,
+  },
 
-logoContainer: {
-  flexDirection: "row",
-  alignItems: "center",
-},
+  logoContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
 
-logo: {
-  width: 36,
-  height: 36,
-  marginRight: 10,
-},
+  logo: {
+    width: 36,
+    height: 36,
+    marginRight: 10,
+  },
 
-companyName: {
-  fontSize: 16,
-  fontWeight: "700",
-  color: "#0F172A",
-},
-
+  companyName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0F766E",
+  },
   taskTitle: {
     color: "#D1FAE5",
     fontSize: 12,

@@ -1,22 +1,25 @@
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
+type Props = {
+  title: string;
+  subtitle?: string;
+  icon?: keyof typeof Ionicons.glyphMap;
+  actionText?: string;
+  onActionPress?: () => void;
+  disabled?: boolean;
+};
+
 export default function AppHeader({
   title,
   subtitle,
   icon,
   actionText,
   onActionPress,
-}: {
-  title: string;
-  subtitle?: string;
-  icon?: any;
-  actionText?: string;
-  onActionPress?: () => void; 
-}) {
+  disabled,
+}: Props) {
   return (
     <View style={styles.container}>
-      {/* LEFT */}
       <View style={styles.left}>
         {icon && (
           <View style={styles.iconBox}>
@@ -36,13 +39,18 @@ export default function AppHeader({
           )}
         </View>
       </View>
-
-      {/* RIGHT */}
       {actionText && (
         <TouchableOpacity
           activeOpacity={0.85}
-          style={styles.button}
-          onPress={onActionPress}
+          style={[
+            styles.button,
+            disabled && { opacity: 0.5 },
+          ]}
+          onPress={() => {
+            if (disabled) return;
+            onActionPress?.();
+          }}
+          disabled={disabled}
         >
           <Text style={styles.buttonText}>{actionText}</Text>
         </TouchableOpacity>
@@ -50,14 +58,13 @@ export default function AppHeader({
     </View>
   );
 }
-
 const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
 
-    height: 56, // 🔥 perfect professional height
+    height: 56,
     paddingHorizontal: 16,
 
     backgroundColor: "#fff",

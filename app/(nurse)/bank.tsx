@@ -1,3 +1,4 @@
+import AppHeader from "@/src/shared/components/AppHeader";
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -8,7 +9,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from "react-native";
-import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type ErrorType = {
@@ -20,6 +21,31 @@ type ErrorType = {
   confirmAccountNumber?: string;
   accountType?: string;
 };
+
+/* ✅ FIX: moved outside */
+function Input({
+  label,
+  value,
+  setValue,
+  error,
+  secure = false,
+  isEditing,
+}: any) {
+  return (
+    <View style={{ marginBottom: 14 }}>
+      <Text style={styles.label}>{label}</Text>
+
+      <TextInput
+        style={[styles.input, error && styles.errorBorder]}
+        value={secure && !isEditing ? "••••••••••" : value}
+        editable={isEditing}
+        onChangeText={setValue}
+      />
+
+      {error && <Text style={styles.errorText}>{error}</Text>}
+    </View>
+  );
+}
 
 export default function Bank() {
   const [vendorId, setVendorId] = useState<string | null>(null);
@@ -38,20 +64,20 @@ export default function Bank() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [errors, setErrors] = useState<ErrorType>({});
   const [originalData, setOriginalData] = useState<any>(null);
-  const handleCancel = () => {
-  if (originalData) {
-    setBankName(originalData.bankName);
-    setBranch(originalData.branch);
-    setIfsc(originalData.ifsc);
-    setHolderName(originalData.holderName);
-    setAccountNumber(originalData.accountNumber);
-    setConfirmAccountNumber(originalData.confirmAccountNumber);
-    setAccountType(originalData.accountType);
-  }
 
-  setErrors({});
-  setIsEditing(false);
-};
+  const handleCancel = () => {
+    if (originalData) {
+      setBankName(originalData.bankName);
+      setBranch(originalData.branch);
+      setIfsc(originalData.ifsc);
+      setHolderName(originalData.holderName);
+      setAccountNumber(originalData.accountNumber);
+      setConfirmAccountNumber(originalData.confirmAccountNumber);
+      setAccountType(originalData.accountType);
+    }
+    setErrors({});
+    setIsEditing(false);
+  };
 
   // 🚀 FETCH DATA
   useEffect(() => {
@@ -68,39 +94,37 @@ export default function Bank() {
 
         const data = await res.json();
 
-       if (data && data.vendorId) {
-  setHasData(true);
-  setIsEditing(false);
+        if (data && data.vendorId) {
+          setHasData(true);
+          setIsEditing(false);
 
-  const formattedData = {
-    bankName: data.bankName || "",
-    branch: data.branchName || "",
-    ifsc: data.ifscCode || "",
-    holderName: data.accountHolderName || "",
-    accountNumber: data.accountNumber || "",
-    confirmAccountNumber: data.accountNumber || "",
-    accountType:
-      data.accountType === "S"
-        ? "Savings"
-        : data.accountType === "C"
-        ? "Current"
-        : data.accountType === "SA"
-        ? "Salary"
-        : "",
-  };
+          const formattedData = {
+            bankName: data.bankName || "",
+            branch: data.branchName || "",
+            ifsc: data.ifscCode || "",
+            holderName: data.accountHolderName || "",
+            accountNumber: data.accountNumber || "",
+            confirmAccountNumber: data.accountNumber || "",
+            accountType:
+              data.accountType === "S"
+                ? "Savings"
+                : data.accountType === "C"
+                ? "Current"
+                : data.accountType === "SA"
+                ? "Salary"
+                : "",
+          };
 
-  // ✅ SET STATES
-  setBankName(formattedData.bankName);
-  setBranch(formattedData.branch);
-  setIfsc(formattedData.ifsc);
-  setHolderName(formattedData.holderName);
-  setAccountNumber(formattedData.accountNumber);
-  setConfirmAccountNumber(formattedData.confirmAccountNumber);
-  setAccountType(formattedData.accountType);
+          setBankName(formattedData.bankName);
+          setBranch(formattedData.branch);
+          setIfsc(formattedData.ifsc);
+          setHolderName(formattedData.holderName);
+          setAccountNumber(formattedData.accountNumber);
+          setConfirmAccountNumber(formattedData.confirmAccountNumber);
+          setAccountType(formattedData.accountType);
 
-  // ✅ SAVE ORIGINAL DATA
-  setOriginalData(formattedData);
-} else {
+          setOriginalData(formattedData);
+        } else {
           setHasData(false);
           setIsEditing(true);
         }
@@ -118,24 +142,25 @@ export default function Bank() {
   const validate = () => {
     let newErrors: ErrorType = {};
 
-    if (!bankName) newErrors.bankName = "Required";
-    if (!branch) newErrors.branch = "Required";
-    if (!ifsc) newErrors.ifsc = "Required";
-    if (!holderName) newErrors.holderName = "Required";
-    if (!accountNumber) newErrors.accountNumber = "Required";
-    if (!confirmAccountNumber) newErrors.confirmAccountNumber = "Required";
+    if (!bankName) newErrors.bankName = "Bank Name Required";
+    if (!branch) newErrors.branch = "Branch Name Required";
+    if (!ifsc) newErrors.ifsc = "IFSC code Required";
+    if (!holderName) newErrors.holderName = "Name Required";
+    if (!accountNumber) newErrors.accountNumber = "Account NumberRequired";
+    if (!confirmAccountNumber)
+      newErrors.confirmAccountNumber = "Required";
 
     if (accountNumber !== confirmAccountNumber) {
       newErrors.confirmAccountNumber = "Does not match";
     }
 
-    if (!accountType) newErrors.accountType = "Required";
+    if (!accountType) newErrors.accountType = "Account Type Required";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // 🚀 SAVE (POST + PUT)
+  // 🚀 SAVE
   const handleSave = async () => {
     if (!validate()) return;
 
@@ -180,35 +205,6 @@ export default function Bank() {
     }
   };
 
-  const renderInput = (
-    label: string,
-    icon: React.ReactNode,
-    placeholder: string,
-    value: string,
-    setValue: (t: string) => void,
-    key: keyof ErrorType
-  ) => (
-    <View style={{ marginTop: 12 }}>
-      <Text style={styles.label}>{label}</Text>
-
-      <View style={[styles.inputBox, errors[key] && styles.errorBorder]}>
-        {icon}
-        <TextInput
-          placeholder={placeholder}
-          style={styles.input}
-          value={value}
-          editable={isEditing}
-          onChangeText={(t) => {
-            setValue(t);
-            setErrors({ ...errors, [key]: "" });
-          }}
-        />
-      </View>
-
-      {errors[key] && <Text style={styles.errorText}>{errors[key]}</Text>}
-    </View>
-  );
-
   if (loading) {
     return (
       <View style={styles.loader}>
@@ -218,173 +214,160 @@ export default function Bank() {
   }
 
   return (
-    <ScrollView style={styles.container}  contentContainerStyle={{ paddingBottom: 40 }} // ✅ BEST WAY
-  showsVerticalScrollIndicator={false}>
-      {/* HEADER */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Bank Details</Text>
+    <SafeAreaView style={{ flex: 1 }}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled" // ✅ FIX
+        showsVerticalScrollIndicator={false}
+      >
+        <AppHeader
+          title="Bank Details"
+          subtitle="Manage your bank information"
+          icon="card-outline"
+          actionText={hasData ? (isEditing ? "Cancel" : "Edit") : ""}
+          onActionPress={() => {
+            if (isEditing) handleCancel();
+            else setIsEditing(true);
+          }}
+        />
 
-        {hasData && (
+        <View style={styles.card}>
+          <Input label="Bank Name *" value={bankName} setValue={setBankName} error={errors.bankName} isEditing={isEditing} />
+          <Input label="Branch *" value={branch} setValue={setBranch} error={errors.branch} isEditing={isEditing} />
+          <Input label="IFSC Code *" value={ifsc} setValue={setIfsc} error={errors.ifsc} isEditing={isEditing} />
+          <Input label="Account Holder Name *" value={holderName} setValue={setHolderName} error={errors.holderName} isEditing={isEditing} />
+          <Input label="Account Number *" value={accountNumber} setValue={setAccountNumber} error={errors.accountNumber}  isEditing={isEditing} />
+          <Input label="Confirm Account Number *" value={confirmAccountNumber} setValue={setConfirmAccountNumber} error={errors.confirmAccountNumber} secure isEditing={isEditing} />
+
+         {/* ACCOUNT TYPE */}
+<View style={{ marginBottom: 14 }}>
+  <Text style={styles.label}>Account Type *</Text>
+
   <TouchableOpacity
-    onPress={() => {
-      if (isEditing) {
-        handleCancel(); // ✅ cancel clicked
-      } else {
-        setIsEditing(true); // ✅ edit clicked
-      }
-    }}
+    activeOpacity={0.8}
+    disabled={!isEditing}
+    style={[
+      styles.input,
+      { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    ]}
+    onPress={() => setShowDropdown(!showDropdown)}
   >
-    <Text style={styles.edit}>
-      {isEditing ? "Cancel" : "Edit"}
+    <Text style={{ color: accountType ? "#000" : "#94A3B8" }}>
+      {accountType || "Select Account Type"}
+    </Text>
+
+    <Text style={{ fontSize: 16 }}>
+      {showDropdown ? "▲" : "▼"}
     </Text>
   </TouchableOpacity>
-)}
-      </View>
 
-      {renderInput(
-        "Bank Name",
-        <MaterialIcons name="account-balance" size={20} color="#777" />,
-        "Enter bank name",
-        bankName,
-        setBankName,
-        "bankName"
-      )}
-
-      {renderInput(
-        "Branch",
-        <Ionicons name="location-outline" size={20} color="#777" />,
-        "Enter branch",
-        branch,
-        setBranch,
-        "branch"
-      )}
-
-      {renderInput(
-        "IFSC Code",
-        <Ionicons name="code-outline" size={20} color="#777" />,
-        "Enter IFSC code",
-        ifsc,
-        setIfsc,
-        "ifsc"
-      )}
-
-      {renderInput(
-        "Account Holder Name",
-        <Ionicons name="person-outline" size={20} color="#777" />,
-        "Enter name",
-        holderName,
-        setHolderName,
-        "holderName"
-      )}
-
-      {renderInput(
-        "Account Number",
-        <Ionicons name="card-outline" size={20} color="#777" />,
-        "Enter account number",
-        accountNumber,
-        setAccountNumber,
-        "accountNumber"
-      )}
-
-      {renderInput(
-        "Confirm Account Number",
-        <Ionicons name="refresh-outline" size={20} color="#777" />,
-        "Re-enter account number",
-        confirmAccountNumber,
-        setConfirmAccountNumber,
-        "confirmAccountNumber"
-      )}
-
-      {/* DROPDOWN */}
-      <Text style={styles.label}>Account Type</Text>
-
-      <TouchableOpacity
-        disabled={!isEditing}
-        style={styles.inputBox}
-        onPress={() => setShowDropdown(!showDropdown)}
-      >
-        <Ionicons name="wallet-outline" size={20} />
-        <Text style={{ marginLeft: 10 }}>
-          {accountType || "Select Type"}
-        </Text>
-      </TouchableOpacity>
-
-      {showDropdown &&
-        ["Savings", "Current", "Salary"].map((t) => (
-          <TouchableOpacity
-            key={t}
-            style={styles.dropdownItem}
-            onPress={() => {
-              setAccountType(t);
-              setShowDropdown(false);
-            }}
-          >
-            <Text>{t}</Text>
-          </TouchableOpacity>
-        ))}
-
-      {/* SAVE BUTTON */}
-      {isEditing && (
-        <TouchableOpacity style={styles.button} onPress={handleSave}>
-          <Text style={styles.buttonText}>
-            {hasData ? "Save Changes" : "Save Details"}
-          </Text>
+  {/* DROPDOWN LIST */}
+  {showDropdown && (
+    <View style={styles.dropdownBox}>
+      {["Savings", "Current", "Salary"].map((t, index) => (
+        <TouchableOpacity
+          key={t}
+          style={[
+            styles.dropdownItem,
+            index === 2 && { borderBottomWidth: 0 },
+          ]}
+          onPress={() => {
+            setAccountType(t);
+            setShowDropdown(false);
+            setErrors({ ...errors, accountType: "" });
+          }}
+        >
+          <Text style={{ fontSize: 14 }}>{t}</Text>
         </TouchableOpacity>
-      )}
-    </ScrollView>
+      ))}
+    </View>
+  )}
+
+  {errors.accountType && (
+    <Text style={styles.errorText}>{errors.accountType}</Text>
+  )}
+</View>
+        </View>
+
+        {isEditing && (
+          <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+            <Text style={styles.saveText}>
+              {hasData ? "Save Changes" : "Save Details"}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 15, backgroundColor: "#f5f7fb", paddingBottom: 40, },
-
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingTop: 20,
+  container: {
+    flexGrow: 1,
+    backgroundColor: "#F1F5F9",
+    padding: 16,
+    paddingBottom: 40,
   },
 
-  title: { fontSize: 22, fontWeight: "bold" },
-  edit: { color: "#0f766e", fontWeight: "bold" },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 14,
+  },
 
   label: {
-    fontSize: 13,
-    color: "#555",
+    fontSize: 11,
+    color: "#64748B",
     marginBottom: 4,
-    marginLeft: 2,
-    
   },
 
-  inputBox: {
-    flexDirection: "row",
-    backgroundColor: "#e9edf3",
-    padding: 12,
+  input: {
+    backgroundColor: "#F8FAFC",
     borderRadius: 10,
-    alignItems: "center",
-   
+    padding: 12,
+    fontSize: 14,
   },
 
-  input: { flex: 1, marginLeft: 10 },
+  saveBtn: {
+    backgroundColor: "#0F766E",
+    padding: 16,
+    borderRadius: 14,
+    alignItems: "center",
+    marginTop: 10,
+  },
+
+  saveText: {
+    color: "#fff",
+    fontWeight: "600",
+  },
 
   dropdownItem: {
     padding: 12,
     backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    paddingBottom:20,
+   
   },
-
-  button: {
-    backgroundColor: "#0f766e",
-    padding: 15,
-    marginTop: 20,
-    borderRadius: 10,
-  },
-
-  buttonText: { color: "#fff", textAlign: "center" },
 
   errorText: { color: "red", fontSize: 12 },
-  errorBorder: { borderWidth: 1, borderColor: "red" },
 
-  loader: { flex: 1, justifyContent: "center", alignItems: "center" },
+  errorBorder: {
+    borderWidth: 1,
+    borderColor: "red",
+  },
+
+  loader: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  dropdownBox: {
+  backgroundColor: "#fff",
+  borderRadius: 10,
+  marginTop: 4,
+  borderWidth: 1,
+  borderColor: "#E2E8F0",
+  overflow: "hidden",
+},
+
+
 });

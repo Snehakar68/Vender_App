@@ -65,8 +65,6 @@ export default function DoctorLayout() {
             ),
           }}
         />
-
-        {/* Hidden */}
         <Tabs.Screen name="personal-details" options={{ href: null }} />
         <Tabs.Screen name="professional-details" options={{ href: null }} />
         <Tabs.Screen name="bank-details" options={{ href: null }} />
