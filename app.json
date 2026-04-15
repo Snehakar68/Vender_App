@@ -8,6 +8,18 @@
         "foregroundImage": "./src/assets/images/android-icon-foreground.png",
         "backgroundImage": "./src/assets/images/android-icon-background.png",
         "monochromeImage": "./src/assets/images/android-icon-monochrome.png"
+      },
+
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyD6OXtEO1HlFIrqlEyoTjxFjZwdLAwRCao"
+        }
+      }
+    },
+
+    "ios": {
+      "config": {
+        "googleMapsApiKey": "AIzaSyD6OXtEO1HlFIrqlEyoTjxFjZwdLAwRCao"
       }
     },
 
