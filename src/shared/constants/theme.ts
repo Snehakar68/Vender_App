@@ -1,53 +1,117 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * Jhilmil Homecare - Clinical Atelier Design System (Final Locked)
  */
-
-import { Platform } from 'react-native';
-
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
 
 export const Colors = {
   light: {
-    text: '#11181C',
-    background: '#fff',
-    tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
-    tabIconSelected: tintColorLight,
-  },
-  dark: {
-    text: '#ECEDEE',
-    background: '#151718',
-    tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
-    tabIconSelected: tintColorDark,
+    // Core
+    primary: "#2E86DE",
+    secondary: "#54A0FF",
+    tertiary: "#00A8A8",
+    error: "#E74C3C",
+
+    // Backgrounds
+    background: "#F5F6FA",
+    surface: "#FFFFFF",
+    surfaceContainerLowest: "#FFFFFF",
+    surfaceContainerLow: "#F8F9FB",
+    surfaceContainerHigh: "#F1F3F7",          // ✅ added
+    surfaceContainerHighest: "#EEF1F6",
+
+    // Text
+    onSurface: "#222F3E",
+    onSurfaceVariant: "#6B7280",
+    onPrimary: "#FFFFFF",                     // ✅ added
+
+    // Borders
+    outline: "#A0A4A8",
+    outlineVariant: "#D1D5DB",
+
+    // Extended
+    primaryFixed: "#D6E9FF",
+    tertiaryFixed: "#CFF5F5",
+
+    // Status containers
+    errorContainer: "#FDECEA",                // ✅ added
+
+    // Inverse
+    inverseSurface: "#1F2937",
+    inverseOnSurface: "#FFFFFF",
   },
 };
 
-export const Fonts = Platform.select({
-  ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
+// Spacing
+export const Spacing = {
+  xs: 4,
+  sm: 8,
+  md: 16,
+  lg: 24,
+  xl: 32,
+};
+
+// Radius
+export const Radius = {
+  sm: 6,
+  md: 10,
+  lg: 16,
+  xl: 24,
+  full: 999,
+};
+
+// Shadow
+export const Shadow = {
+  card: {
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
+  elevated: {
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 6,
   },
-  web: {
-    sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-    serif: "Georgia, 'Times New Roman', serif",
-    rounded: "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
-    mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+  subtle: {
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
   },
-});
+};
+
+// Fonts
+export const FontFamily = {
+  headline: "Inter_600SemiBold",
+  headlineMedium: "Inter_600SemiBold",
+  headlineSemiBold: "Inter_600SemiBold",
+
+  body: "Inter_400Regular",
+  bodyMedium: "Inter_500Medium",
+  bodySemiBold: "Inter_600SemiBold",
+
+  label: "Inter_500Medium",
+};
+
+// Font sizes
+export const FontSize = {
+  labelSmall: 10,
+  labelMedium: 12,
+  labelLarge: 13,
+
+  bodySmall: 12,
+  bodyMedium: 14,
+  bodyLarge: 16,
+
+  titleSmall: 14,
+  titleLarge: 16,
+
+  headlineSmall: 18,
+  headlineMedium: 20,   // ✅ ADD THIS
+  headlineLarge: 22,
+};
+
+// Button
+export const ButtonSize = {
+  minHeight: 48,
+};
