@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { router } from 'expo-router';
 import { AmbColors, AmbRadius, AmbShadow } from '@/src/features/ambulance/constants/ambulanceTheme';
 import AmbulanceTopBar from '@/src/features/ambulance/components/AmbulanceTopBar';
-
+import { AuthContext } from "@/src/core/context/AuthContext";
 const STATS = [
   { value: '128', label: 'TRIPS', color: AmbColors.primary },
   { value: '4.9', label: 'RATING', color: AmbColors.tertiary },
@@ -71,6 +71,7 @@ const NAV_ITEMS = [
 ];
 
 export default function ProfileScreen() {
+  const auth = useContext(AuthContext);
   const handleNavPress = (route: string | null) => {
     if (route) {
       router.push(route as any);
@@ -78,7 +79,9 @@ export default function ProfileScreen() {
       Alert.alert('Coming Soon', 'This section will be available soon.');
     }
   };
-
+ const handleSignOut = async () => {
+    await auth?.logout();
+  };
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <AmbulanceTopBar showNotification avatarInitials="AS" />
@@ -138,7 +141,7 @@ export default function ProfileScreen() {
 
         {/* ── Logout ───────────────────────────────────────────────────── */}
         <View style={styles.dangerZone}>
-          <TouchableOpacity style={styles.logoutBtn} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.logoutBtn} activeOpacity={0.7} onPress={handleSignOut}>
             <MaterialIcons name="logout" size={16} color={AmbColors.error} />
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
