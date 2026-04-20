@@ -1,14 +1,9 @@
-// src/features/ambulance/screens/DriverAssignmentScreen.jsx
-// React Native (Expo) — mirrors the web "Driver Assignment" dashboard exactly
-
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
-  Animated,
+  ActivityIndicator,
+  Alert,
   Dimensions,
-  FlatList,
   Modal,
-  Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,61 +13,39 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { AuthContext } from "@/src/core/context/AuthContext";
+
+// ─── API ──────────────────────────────────────────────────────────────────────
+const API_BASE = "https://coreapi-service-111763741518.asia-south1.run.app/api/Ambulance";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const C = {
-  primary:      "#059669",
-  primaryLight: "#d1fae5",
-  primaryText:  "#065f46",
-  danger:       "#dc2626",
-  dangerLight:  "#fee2e2",
-  dangerText:   "#991b1b",
-  blue:         "#2563eb",
-  blueLight:    "#dbeafe",
-  blueText:     "#1e40af",
-  white:        "#ffffff",
-  bg:           "#f3f4f6",
-  surface:      "#ffffff",
-  border:       "#e5e7eb",
-  text:         "#111827",
-  textMuted:    "#6b7280",
-  textLight:    "#9ca3af",
-  selectedRow:  "#eff6ff",
+  primary:        "#059669",
+  primaryLight:   "#d1fae5",
+  primaryText:    "#065f46",
+  danger:         "#dc2626",
+  dangerLight:    "#fee2e2",
+  dangerText:     "#991b1b",
+  blue:           "#2563eb",
+  blueLight:      "#dbeafe",
+  blueText:       "#1e40af",
+  white:          "#ffffff",
+  bg:             "#f3f4f6",
+  surface:        "#ffffff",
+  border:         "#e5e7eb",
+  text:           "#111827",
+  textMuted:      "#6b7280",
+  textLight:      "#9ca3af",
+  selectedRow:    "#eff6ff",
   selectedBorder: "#bfdbfe",
-  shadow:       "#00000014",
+  shadow:         "#00000014",
 };
 
-const { width: SW, height: SH } = Dimensions.get("window");
+const { height: SH } = Dimensions.get("window");
 
-// ─── Demo data ────────────────────────────────────────────────────────────────
-const INIT_AMBULANCES = [
-  { id: "1", vehicleNo: "758689",   type: "basic",   driver: "jhji",  driverId: "d1" },
-  { id: "2", vehicleNo: "79879870", type: "basic",   driver: "rahul", driverId: "d3" },
-  { id: "3", vehicleNo: "78998798", type: "advance", driver: null,    driverId: null },
-];
-
-const INIT_DRIVERS = [
-  { id: "d1", name: "jhji",  license: "hkhijh",  assignedTo: "758689" },
-  { id: "d2", name: "rohit", license: "7979877",  assignedTo: null },
-  { id: "d3", name: "rahul", license: "66865868", assignedTo: "79879870" },
-  { id: "d4", name: "78678", license: "9869869",  assignedTo: null },
-  { id: "d5", name: "Vikas", license: "3312456",  assignedTo: null },
-];
-
-const INIT_HISTORY = {
-  "1": [
-    { driverName: "jhji",  fromDate: "2024-01-10", toDate: "2024-03-15" },
-    { driverName: "Vikas", fromDate: "2023-06-01", toDate: "2024-01-09" },
-  ],
-  "2": [
-    { driverName: "rahul", fromDate: "2024-02-01", toDate: null },
-  ],
-  "3": [],
-};
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Badge ────────────────────────────────────────────────────────────────────
 function Badge({ label, variant }) {
-  const styles = {
+  const map = {
     active:    { bg: C.primaryLight, text: C.primaryText },
     free:      { bg: "#f3f4f6",      text: "#6b7280" },
     available: { bg: C.primaryLight, text: C.primaryText },
@@ -80,7 +53,7 @@ function Badge({ label, variant }) {
     completed: { bg: C.blueLight,    text: C.blueText },
     current:   { bg: C.primaryLight, text: C.primaryText },
   };
-  const t = styles[variant] || styles.free;
+  const t = map[variant] || map.free;
   return (
     <View style={[bs.badge, { backgroundColor: t.bg }]}>
       <Text style={[bs.badgeText, { color: t.text }]}>{label}</Text>
@@ -89,11 +62,19 @@ function Badge({ label, variant }) {
 }
 
 // ─── Assignment History ───────────────────────────────────────────────────────
-function AssignmentHistory({ history }) {
+function AssignmentHistory({ history, loading }) {
+  if (loading) {
+    return (
+      <View style={bs.historySection}>
+        <Text style={bs.historyTitle}>Assignment History</Text>
+        <ActivityIndicator size="small" color={C.primary} style={{ marginTop: 8 }} />
+      </View>
+    );
+  }
   return (
     <View style={bs.historySection}>
       <Text style={bs.historyTitle}>Assignment History</Text>
-      {history.length === 0 ? (
+      {!history || history.length === 0 ? (
         <View style={bs.historyEmpty}>
           <Text style={bs.historyEmptyText}>No previous assignments</Text>
         </View>
@@ -101,12 +82,17 @@ function AssignmentHistory({ history }) {
         history.map((h, i) => (
           <View key={i} style={bs.historyCard}>
             <View style={bs.historyCardLeft}>
-              <Text style={bs.historyDriverName}>{h.driverName}</Text>
+              {/* API may return driver_name or driverName */}
+              <Text style={bs.historyDriverName}>{h.driver_name ?? h.driverName}</Text>
               <Text style={bs.historyDates}>
-                {h.fromDate} — {h.toDate || "Present"}
+                {h.from_date ?? h.fromDate} —{" "}
+                {h.to_date ?? h.toDate ? (h.to_date ?? h.toDate) : "Present"}
               </Text>
             </View>
-            <Badge label={h.toDate ? "Completed" : "Current"} variant={h.toDate ? "completed" : "current"} />
+            <Badge
+              label={(h.to_date ?? h.toDate) ? "Completed" : "Current"}
+              variant={(h.to_date ?? h.toDate) ? "completed" : "current"}
+            />
           </View>
         ))
       )}
@@ -114,18 +100,40 @@ function AssignmentHistory({ history }) {
   );
 }
 
-// ─── Assign Panel (modal bottom sheet) ───────────────────────────────────────
-function AssignPanel({ ambulance, drivers, history, onAssign, onCancel }) {
+// ─── Assign Panel ─────────────────────────────────────────────────────────────
+function AssignPanel({
+  ambulance,
+  drivers,
+  history,
+  historyLoading,
+  onAssign,
+  onCancel,
+  assigning,
+}) {
   const [driverSearch, setDriverSearch] = useState("");
   const [selectedDriver, setSelectedDriver] = useState(null);
 
+  // Reset selection when panel opens for a new ambulance
+  useEffect(() => {
+    setSelectedDriver(null);
+    setDriverSearch("");
+  }, [ambulance?.ambulance_id]);
+
   const filtered = useMemo(
-    () => drivers.filter((d) => d.name.toLowerCase().includes(driverSearch.toLowerCase())),
+    () =>
+      drivers.filter((d) =>
+        (d.driver_name ?? "").toLowerCase().includes(driverSearch.toLowerCase())
+      ),
     [drivers, driverSearch]
   );
 
   return (
-    <Modal visible={!!ambulance} animationType="slide" transparent onRequestClose={onCancel}>
+    <Modal
+      visible={!!ambulance}
+      animationType="slide"
+      transparent
+      onRequestClose={onCancel}
+    >
       <View style={bs.modalOverlay}>
         <View style={bs.panelSheet}>
           {/* Handle */}
@@ -137,7 +145,7 @@ function AssignPanel({ ambulance, drivers, history, onAssign, onCancel }) {
               <Text style={bs.panelTitle}>Assign Driver</Text>
               <Text style={bs.panelSubtitle}>
                 Ambulance:{" "}
-                <Text style={bs.panelAmbNo}>{ambulance?.vehicleNo}</Text>
+                <Text style={bs.panelAmbNo}>{ambulance?.vehical_number}</Text>
               </Text>
             </View>
             <TouchableOpacity style={bs.closeBtn} onPress={onCancel}>
@@ -165,11 +173,11 @@ function AssignPanel({ ambulance, drivers, history, onAssign, onCancel }) {
           {/* Driver list */}
           <ScrollView style={bs.driverList} showsVerticalScrollIndicator={false}>
             {filtered.map((d) => {
-              const isAssigned = !!d.assignedTo;
-              const isSelected = selectedDriver?.id === d.id;
+              const isAssigned = !!d.is_assigned; // use API flag
+              const isSelected = selectedDriver?.driver_id === d.driver_id;
               return (
                 <TouchableOpacity
-                  key={d.id}
+                  key={d.driver_id}
                   style={[
                     bs.driverCard,
                     isAssigned && bs.driverCardDisabled,
@@ -179,16 +187,24 @@ function AssignPanel({ ambulance, drivers, history, onAssign, onCancel }) {
                   activeOpacity={isAssigned ? 1 : 0.8}
                 >
                   <View style={bs.driverRadioArea}>
-                    <View style={[bs.radio, isSelected && bs.radioActive, isAssigned && bs.radioDisabled]}>
+                    <View
+                      style={[
+                        bs.radio,
+                        isSelected && bs.radioActive,
+                        isAssigned && bs.radioDisabled,
+                      ]}
+                    >
                       {isSelected && <View style={bs.radioDot} />}
                     </View>
                   </View>
                   <View style={bs.driverInfo}>
-                    <Text style={[bs.driverName, isAssigned && { color: C.textMuted }]}>{d.name}</Text>
-                    <Text style={bs.driverLicense}>DL: {d.license}</Text>
+                    <Text style={[bs.driverName, isAssigned && { color: C.textMuted }]}>
+                      {d.driver_name}
+                    </Text>
+                    <Text style={bs.driverLicense}>DL: {d.license_number ?? "—"}</Text>
                   </View>
                   {isAssigned ? (
-                    <Badge label={`Assigned to ${d.assignedTo}`} variant="assigned" />
+                    <Badge label="Assigned" variant="assigned" />
                   ) : (
                     <Badge label="Available" variant="available" />
                   )}
@@ -199,22 +215,31 @@ function AssignPanel({ ambulance, drivers, history, onAssign, onCancel }) {
 
           {/* Actions */}
           <View style={bs.panelActions}>
-            <TouchableOpacity style={bs.cancelBtn} onPress={onCancel}>
+            <TouchableOpacity style={bs.cancelBtn} onPress={onCancel} disabled={assigning}>
               <Text style={bs.cancelBtnText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[bs.assignBtn, !selectedDriver && bs.assignBtnDisabled]}
+              style={[bs.assignBtn, (!selectedDriver || assigning) && bs.assignBtnDisabled]}
               onPress={() => selectedDriver && onAssign(selectedDriver)}
-              activeOpacity={selectedDriver ? 0.85 : 1}
+              activeOpacity={selectedDriver && !assigning ? 0.85 : 1}
             >
-              <Text style={[bs.assignBtnText, !selectedDriver && { color: C.textLight }]}>
-                Assign Driver
-              </Text>
+              {assigning ? (
+                <ActivityIndicator size="small" color={C.white} />
+              ) : (
+                <Text
+                  style={[
+                    bs.assignBtnText,
+                    !selectedDriver && { color: C.textLight },
+                  ]}
+                >
+                  Assign Driver
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
 
           {/* History */}
-          <AssignmentHistory history={history || []} />
+          <AssignmentHistory history={history} loading={historyLoading} />
 
           <View style={{ height: 20 }} />
         </View>
@@ -225,58 +250,170 @@ function AssignPanel({ ambulance, drivers, history, onAssign, onCancel }) {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function DriverAssignmentScreen() {
-  const [ambulances, setAmbulances] = useState(INIT_AMBULANCES);
-  const [drivers, setDrivers] = useState(INIT_DRIVERS);
-  const [history] = useState(INIT_HISTORY);
+const auth = useContext(AuthContext);
+  const vendorId = auth?.user?.vendorId ?? '';
+
+  const [ambulances, setAmbulances] = useState([]);
+  const [drivers, setDrivers] = useState([]);
+  const [history, setHistory] = useState([]);
   const [globalSearch, setGlobalSearch] = useState("");
   const [selectedAmbulance, setSelectedAmbulance] = useState(null);
 
-  const filtered = useMemo(
-    () =>
-      ambulances.filter((a) => {
-        const q = globalSearch.toLowerCase();
-        return (
-          a.vehicleNo.toLowerCase().includes(q) ||
-          (a.driver || "").toLowerCase().includes(q)
-        );
-      }),
-    [ambulances, globalSearch]
+  // Loading states
+  const [loadingAmbulances, setLoadingAmbulances] = useState(false);
+  const [loadingDrivers, setLoadingDrivers] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [assigning, setAssigning] = useState(false);
+  const [unassigningId, setUnassigningId] = useState(null);
+
+  // Fetch once vendorId is available
+  useEffect(() => {
+    if (!vendorId) return;
+    fetchAmbulances();
+    fetchDrivers();
+  }, [vendorId]);
+
+  // ── API calls ───────────────────────────────────────────────────────────────
+
+  const fetchAmbulances = useCallback(async () => {
+    if (!vendorId) return;
+    setLoadingAmbulances(true);
+    try {
+      const res = await fetch(`${API_BASE}/Get_AmbulanceList_By_Vendor_id/${vendorId}`);
+      const data = await res.json();
+      setAmbulances(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Ambulance fetch error:", err);
+    } finally {
+      setLoadingAmbulances(false);
+    }
+  }, [vendorId]);
+
+  const fetchDrivers = useCallback(async () => {
+    if (!vendorId) return;
+    setLoadingDrivers(true);
+    try {
+      const res = await fetch(`${API_BASE}/Get_DriverList_By_Vendor_id/${vendorId}`);
+      const data = await res.json();
+      setDrivers(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Driver fetch error:", err);
+    } finally {
+      setLoadingDrivers(false);
+    }
+  }, [vendorId]);
+
+  const fetchHistory = useCallback(async (ambulanceId) => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/Get_AssignmentHistory/${ambulanceId}`);
+      const data = await res.json();
+      setHistory(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("History fetch error:", err);
+      setHistory([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  const handleSelectAmbulance = useCallback(
+    (amb) => {
+      setSelectedAmbulance(amb);
+      setHistory([]);
+      fetchHistory(amb.ambulance_id);
+    },
+    [fetchHistory]
   );
 
-  const handleAssign = (driver) => {
-    setAmbulances((prev) =>
-      prev.map((a) =>
-        a.id === selectedAmbulance.id
-          ? { ...a, driver: driver.name, driverId: driver.id }
-          : a
-      )
-    );
-    setDrivers((prev) =>
-      prev.map((d) =>
-        d.id === driver.id
-          ? { ...d, assignedTo: selectedAmbulance.vehicleNo }
-          : d
-      )
-    );
-    setSelectedAmbulance(null);
-  };
+  const handleAssign = useCallback(
+    async (driver) => {
+      if (!selectedAmbulance || !driver) return;
+      setAssigning(true);
+      try {
+        const formData = new FormData();
+        formData.append("vendor_id", vendorId);
+        formData.append("ambulanceId", selectedAmbulance.ambulance_id);
+        formData.append("DriverId", driver.driver_id);
 
-  const handleUnassign = (ambulance) => {
-    setDrivers((prev) =>
-      prev.map((d) =>
-        d.id === ambulance.driverId ? { ...d, assignedTo: null } : d
-      )
-    );
-    setAmbulances((prev) =>
-      prev.map((a) =>
-        a.id === ambulance.id ? { ...a, driver: null, driverId: null } : a
-      )
-    );
-  };
+        const res = await fetch(`${API_BASE}/Add_Assignment`, {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!res.ok) throw new Error("Assignment failed");
+
+        await fetchAmbulances();
+        await fetchDrivers();
+        await fetchHistory(selectedAmbulance.ambulance_id);
+        setSelectedAmbulance(null);
+      } catch (err) {
+        Alert.alert("Error", "Failed to assign driver. Please try again.");
+        console.error("Assign error:", err);
+      } finally {
+        setAssigning(false);
+      }
+    },
+    [selectedAmbulance, vendorId, fetchAmbulances, fetchDrivers, fetchHistory]
+  );
+
+  const handleUnassign = useCallback(
+    async (ambulance) => {
+      Alert.alert(
+        "Unassign Driver",
+        `Remove ${ambulance.assign_driver?.driver_name ?? "driver"} from ${ambulance.vehical_number}?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Unassign",
+            style: "destructive",
+            onPress: async () => {
+              setUnassigningId(ambulance.ambulance_id);
+              try {
+                const res = await fetch(
+                  `${API_BASE}/UnAssign_driver_From_Ambulance`,
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(ambulance.ambulance_id),
+                  }
+                );
+                if (!res.ok) throw new Error("Unassign failed");
+                await fetchAmbulances();
+                await fetchDrivers();
+                if (selectedAmbulance?.ambulance_id === ambulance.ambulance_id) {
+                  await fetchHistory(ambulance.ambulance_id);
+                }
+              } catch (err) {
+                Alert.alert("Error", "Failed to unassign driver. Please try again.");
+                console.error("Unassign error:", err);
+              } finally {
+                setUnassigningId(null);
+              }
+            },
+          },
+        ]
+      );
+    },
+    [fetchAmbulances, fetchDrivers, fetchHistory, selectedAmbulance]
+  );
+
+  // ── Filtered list ───────────────────────────────────────────────────────────
+  const filtered = useMemo(() => {
+    const q = globalSearch.toLowerCase();
+    return ambulances.filter((a) => {
+      const vehicleMatch = (a.vehical_number ?? "").toLowerCase().includes(q);
+      const driverMatch = (a.assign_driver?.driver_name ?? "").toLowerCase().includes(q);
+      return vehicleMatch || driverMatch;
+    });
+  }, [ambulances, globalSearch]);
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+  const isLoading = loadingAmbulances || loadingDrivers;
 
   return (
     <SafeAreaView style={s.safe} edges={["top"]}>
-      {/* ── Header ─────────────────────────────────────────────────── */}
+      {/* Header */}
       <View style={s.header}>
         <Text style={s.headerTitle}>Driver Assignment</Text>
         <Text style={s.headerSub}>Manage and assign drivers to ambulances</Text>
@@ -288,7 +425,7 @@ export default function DriverAssignmentScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* ── Global search ──────────────────────────────────────────── */}
+        {/* Global search */}
         <View style={s.searchBox}>
           <MaterialIcons name="search" size={18} color={C.textLight} />
           <TextInput
@@ -305,70 +442,98 @@ export default function DriverAssignmentScreen() {
           )}
         </View>
 
-        {/* ── Current Assignments card ───────────────────────────────── */}
+        {/* Current Assignments card */}
         <View style={s.card}>
-          <Text style={s.cardTitle}>Current Assignments</Text>
+          <View style={s.cardTitleRow}>
+            <Text style={s.cardTitle}>Current Assignments</Text>
+            {isLoading && <ActivityIndicator size="small" color={C.primary} />}
+          </View>
 
           {/* Table header */}
           <View style={s.tableHeader}>
             <Text style={[s.th, { flex: 1.2 }]}>Vehicle No</Text>
-            <Text style={[s.th, { flex: 1 }]}>Type</Text>
+            <Text style={[s.th, { flex: 0.9 }]}>Type</Text>
             <Text style={[s.th, { flex: 1 }]}>Driver</Text>
-            <Text style={[s.th, { flex: 1 }]}>Status</Text>
+            <Text style={[s.th, { flex: 0.85 }]}>Status</Text>
             <Text style={[s.th, { flex: 1, textAlign: "center" }]}>Action</Text>
           </View>
 
           {/* Table rows */}
-          {filtered.map((amb, idx) => {
-            const isSelected = selectedAmbulance?.id === amb.id;
-            const isLast = idx === filtered.length - 1;
-            return (
-              <View
-                key={amb.id}
-                style={[
-                  s.tableRow,
-                  isSelected && s.tableRowSelected,
-                  isLast && { borderBottomWidth: 0 },
-                ]}
-              >
-                <Text style={[s.td, s.tdBold, { flex: 1.2 }]}>{amb.vehicleNo}</Text>
-                <Text style={[s.td, { flex: 1 }]}>{amb.type}</Text>
-                <Text style={[s.td, { flex: 1, color: amb.driver ? C.text : C.textLight }]}>
-                  {amb.driver || "—"}
-                </Text>
-                <View style={{ flex: 1 }}>
-                  <Badge label={amb.driver ? "Active" : "Free"} variant={amb.driver ? "active" : "free"} />
+          {filtered.length === 0 && !isLoading ? (
+            <View style={s.emptyRow}>
+              <Text style={s.emptyText}>No ambulances found</Text>
+            </View>
+          ) : (
+            filtered.map((amb, idx) => {
+              const isSelected = selectedAmbulance?.ambulance_id === amb.ambulance_id;
+              const isLast = idx === filtered.length - 1;
+              const driverName = amb.assign_driver?.driver_name ?? null;
+              const isUnassigning = unassigningId === amb.ambulance_id;
+
+              return (
+                <View
+                  key={amb.ambulance_id}
+                  style={[
+                    s.tableRow,
+                    isSelected && s.tableRowSelected,
+                    isLast && { borderBottomWidth: 0 },
+                  ]}
+                >
+                  <Text style={[s.td, s.tdBold, { flex: 1.2 }]}>
+                    {amb.vehical_number}
+                  </Text>
+                  <Text style={[s.td, { flex: 0.9 }]}>
+                    {amb.ambulance_type ?? "—"}
+                  </Text>
+                  <Text
+                    style={[
+                      s.td,
+                      { flex: 1, color: driverName ? C.text : C.textLight },
+                    ]}
+                  >
+                    {driverName ?? "—"}
+                  </Text>
+                  <View style={{ flex: 0.85 }}>
+                    <Badge
+                      label={driverName ? "Active" : "Free"}
+                      variant={driverName ? "active" : "free"}
+                    />
+                  </View>
+                  <View style={{ flex: 1, alignItems: "center" }}>
+                    {isUnassigning ? (
+                      <ActivityIndicator size="small" color={C.danger} />
+                    ) : driverName ? (
+                      <TouchableOpacity onPress={() => handleUnassign(amb)}>
+                        <Text style={s.actionUnassign}>Unassign</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        style={s.assignPill}
+                        onPress={() => handleSelectAmbulance(amb)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={s.assignPillText}>Assign</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
-                <View style={{ flex: 1, alignItems: "center" }}>
-                  {amb.driver ? (
-                    <TouchableOpacity onPress={() => handleUnassign(amb)}>
-                      <Text style={s.actionUnassign}>Unassign</Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <TouchableOpacity
-                      style={s.assignPill}
-                      onPress={() => setSelectedAmbulance(amb)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={s.assignPillText}>Assign</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-            );
-          })}
+              );
+            })
+          )}
         </View>
 
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* ── Assign Panel ───────────────────────────────────────────────── */}
+      {/* Assign Panel */}
       <AssignPanel
         ambulance={selectedAmbulance}
         drivers={drivers}
-        history={history[selectedAmbulance?.id] || []}
+        history={history}
+        historyLoading={historyLoading}
         onAssign={handleAssign}
         onCancel={() => setSelectedAmbulance(null)}
+        assigning={assigning}
       />
     </SafeAreaView>
   );
@@ -385,9 +550,9 @@ const s = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: C.border,
-    shadowColor: C.shadow,
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
+    shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 3,
   },
@@ -396,7 +561,6 @@ const s = StyleSheet.create({
 
   scroll: { padding: 16, paddingBottom: 32 },
 
-  // Search
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -408,39 +572,38 @@ const s = StyleSheet.create({
     paddingVertical: 10,
     gap: 10,
     marginBottom: 16,
-    shadowColor: C.shadow,
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 1,
+    shadowOpacity: 0.05,
     shadowRadius: 3,
     elevation: 2,
   },
   searchInput: { flex: 1, fontSize: 14, color: C.text },
 
-  // Card
   card: {
     backgroundColor: C.white,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: C.border,
     overflow: "hidden",
-    shadowColor: C.shadow,
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
+    shadowOpacity: 0.06,
     shadowRadius: 6,
     elevation: 3,
   },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: C.text,
+  cardTitleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
+  cardTitle: { fontSize: 16, fontWeight: "700", color: C.text },
 
-  // Table
   tableHeader: {
     flexDirection: "row",
     paddingHorizontal: 16,
@@ -472,6 +635,9 @@ const s = StyleSheet.create({
   td:     { fontSize: 13, color: C.text },
   tdBold: { fontWeight: "600" },
 
+  emptyRow: { padding: 24, alignItems: "center" },
+  emptyText: { fontSize: 13, color: C.textMuted },
+
   actionUnassign: { fontSize: 13, fontWeight: "600", color: C.danger },
   assignPill: {
     borderWidth: 1.5,
@@ -483,7 +649,6 @@ const s = StyleSheet.create({
   assignPillText: { fontSize: 12, fontWeight: "600", color: C.blue },
 });
 
-// Badge styles (separate sheet)
 const bs = StyleSheet.create({
   badge: {
     alignSelf: "flex-start",
@@ -493,7 +658,6 @@ const bs = StyleSheet.create({
   },
   badgeText: { fontSize: 11, fontWeight: "600" },
 
-  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.35)",
@@ -524,16 +688,15 @@ const bs = StyleSheet.create({
     marginBottom: 16,
     paddingTop: 4,
   },
-  panelTitle:   { fontSize: 18, fontWeight: "700", color: C.text },
-  panelSubtitle:{ fontSize: 13, color: C.textMuted, marginTop: 3 },
-  panelAmbNo:   { fontWeight: "700", color: C.text },
+  panelTitle:    { fontSize: 18, fontWeight: "700", color: C.text },
+  panelSubtitle: { fontSize: 13, color: C.textMuted, marginTop: 3 },
+  panelAmbNo:    { fontWeight: "700", color: C.text },
   closeBtn: {
     width: 32, height: 32, borderRadius: 16,
     backgroundColor: "#f3f4f6",
     justifyContent: "center", alignItems: "center",
   },
 
-  // Search inside panel
   searchRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -548,7 +711,6 @@ const bs = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 13, color: C.text },
 
-  // Driver list
   driverList: { maxHeight: SH * 0.28 },
   driverCard: {
     flexDirection: "row",
@@ -582,7 +744,6 @@ const bs = StyleSheet.create({
   driverName:    { fontSize: 13, fontWeight: "600", color: C.text },
   driverLicense: { fontSize: 11, color: C.textMuted, marginTop: 1 },
 
-  // Panel action buttons
   panelActions: {
     flexDirection: "row",
     gap: 12,
@@ -599,7 +760,7 @@ const bs = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  cancelBtnText: { fontSize: 14, fontWeight: "600", color: C.grayText || "#374151" },
+  cancelBtnText: { fontSize: 14, fontWeight: "600", color: "#374151" },
   assignBtn: {
     flex: 1,
     height: 46,
@@ -616,7 +777,6 @@ const bs = StyleSheet.create({
   assignBtnDisabled: { backgroundColor: "#e5e7eb", shadowOpacity: 0, elevation: 0 },
   assignBtnText: { fontSize: 14, fontWeight: "700", color: C.white },
 
-  // History
   historySection: {
     borderTopWidth: 1,
     borderTopColor: C.border,

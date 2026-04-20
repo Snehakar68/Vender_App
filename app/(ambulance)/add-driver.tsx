@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from "react";
 import {
   View,
   Text,
@@ -10,143 +10,196 @@ import {
   Platform,
   Alert,
   Image,
+  ActivityIndicator,
   Dimensions,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { router, useLocalSearchParams } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { AmbColors, AmbRadius, AmbShadow } from '@/src/features/ambulance/constants/ambulanceTheme';
-import { useAmbulanceContext } from '@/src/features/ambulance/context/AmbulanceContext';
-import TransactionalHeader from '@/src/features/ambulance/components/TransactionalHeader';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { router, useLocalSearchParams } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import {
+  AmbColors,
+  AmbRadius,
+  AmbShadow,
+} from "@/src/features/ambulance/constants/ambulanceTheme";
+import TransactionalHeader from "@/src/features/ambulance/components/TransactionalHeader";
+import { AuthContext } from "@/src/core/context/AuthContext";
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// ─── Helper ───────────────────────────────────────────────────────────────────
-
-function buildInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '?';
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
-// ─── Screen ───────────────────────────────────────────────────────────────────
+const API_BASE = "https://coreapi-service-111763741518.asia-south1.run.app/api/Ambulance";
 
 export default function AddDriverScreen() {
-  const { mode = 'add', id } = useLocalSearchParams<{ mode?: string; id?: string }>();
-  const isView = mode === 'view';
-  const isEdit = mode === 'edit';
+  const {
+    mode = "add",
+    id,
+    driverName,
+    driverPhone,
+    driverLicense,
+    driverLicenseExpiry,
+    driverPhoto,      // base64 string from API
+    driverLicenseDoc, // base64 string from API
+    driverAmbulance,
+  } = useLocalSearchParams<{
+    mode?: string;
+    id?: string;
+    driverName?: string;
+    driverPhone?: string;
+    driverLicense?: string;
+    driverLicenseExpiry?: string;
+    driverPhoto?: string;
+    driverLicenseDoc?: string;
+    driverAmbulance?: string;
+  }>();
 
-  const { addDriver, updateDriver, getDriverById } = useAmbulanceContext();
+  const isView = mode === "view";
+  const isEdit = mode === "edit";
 
-  // Personal Information
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
+  const auth = useContext(AuthContext);
+  const vendorId = auth?.user?.vendorId ?? "";
+
+  // ── Form state ────────────────────────────────────────────────────────────
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [licenseNumber, setLicenseNumber] = useState("");
+  const [licenseExpiry, setLicenseExpiry] = useState("");
+  const [assignedAmbulance, setAssignedAmbulance] = useState("");
+
+  // photo: uri = newly picked, base64 = loaded from API via params
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoBase64, setPhotoBase64] = useState<string | null>(null);
 
-  // License Information
-  const [licenseNumber, setLicenseNumber] = useState('');
-  const [licenseExpiry, setLicenseExpiry] = useState('');
+  // license doc: same pattern
   const [licenseDocUri, setLicenseDocUri] = useState<string | null>(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [licenseDocBase64, setLicenseDocBase64] = useState<string | null>(null);
 
-  // Prefill when viewing or editing
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // ── Prefill from params (mirrors web initialData) ─────────────────────────
   useEffect(() => {
-    if ((isView || isEdit) && id) {
-      const driver = getDriverById(id);
-      if (driver) {
-        setName(driver.name);
-        setPhone(driver.phone ?? '');
-        setLicenseNumber(driver.licenseNumber);
-        setLicenseExpiry(driver.licenseExpiry ?? '');
-        if (driver.photoUri) setPhotoUri(driver.photoUri);
-        if (driver.licenseDocUri) setLicenseDocUri(driver.licenseDocUri);
-      }
-    }
+    if ((!isView && !isEdit) || !id) return;
+    if (driverName) setName(decodeURIComponent(driverName));
+    if (driverPhone) setPhone(decodeURIComponent(driverPhone));
+    if (driverLicense) setLicenseNumber(decodeURIComponent(driverLicense));
+    if (driverLicenseExpiry) setLicenseExpiry(decodeURIComponent(driverLicenseExpiry));
+    if (driverAmbulance) setAssignedAmbulance(decodeURIComponent(driverAmbulance));
+    if (driverPhoto) setPhotoBase64(decodeURIComponent(driverPhoto));
+    if (driverLicenseDoc) setLicenseDocBase64(decodeURIComponent(driverLicenseDoc));
   }, [id, mode]);
 
+  // ── Image pickers ─────────────────────────────────────────────────────────
   const pickPhoto = async () => {
     if (isView) return;
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
     });
-    if (!result.canceled) setPhotoUri(result.assets[0].uri);
+    if (!result.canceled) {
+      setPhotoUri(result.assets[0].uri);
+      setPhotoBase64(null);
+    }
   };
 
   const pickLicenseDoc = async () => {
     if (isView) return;
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsEditing: false,
       quality: 0.8,
     });
-    if (!result.canceled) setLicenseDocUri(result.assets[0].uri);
+    if (!result.canceled) {
+      setLicenseDocUri(result.assets[0].uri);
+      setLicenseDocBase64(null);
+    }
   };
 
   const handleDateChange = (_: unknown, date?: Date) => {
     setShowDatePicker(false);
-    if (date) {
-      setLicenseExpiry(date.toISOString().split('T')[0]);
+    if (date) setLicenseExpiry(date.toISOString().split("T")[0]);
+  };
+
+  // ── Validation (mirrors web validate()) ──────────────────────────────────
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!name.trim()) e.name = "Driver name is required";
+    if (!phone.trim()) e.phone = "Mobile number is required";
+    else if (!/^[6-9]\d{9}$/.test(phone)) e.phone = "Enter valid 10 digit mobile number";
+    if (!licenseNumber.trim()) e.license = "License number required";
+    if (!licenseExpiry) e.expiry = "License expiry required";
+    if (!isEdit && !photoUri && !photoBase64) e.photo = "Driver photo required";
+    if (!isEdit && !licenseDocUri && !licenseDocBase64) e.licenseDoc = "License document required";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  // ── Submit ────────────────────────────────────────────────────────────────
+  const handleSubmit = async () => {
+    if (!validate()) return;
+    setSubmitting(true);
+    try {
+      const fd = new FormData();
+      fd.append("vendor_id", vendorId);
+      fd.append("driver_name", name.trim());
+      fd.append("mobile", phone.trim());
+      fd.append("license_no", licenseNumber.trim());
+      fd.append("license_expiry", licenseExpiry);
+
+      if (photoUri) {
+        fd.append("photo", { uri: photoUri, name: "photo.jpg", type: "image/jpeg" } as any);
+      }
+      if (licenseDocUri) {
+        fd.append("license", { uri: licenseDocUri, name: "license.jpg", type: "image/jpeg" } as any);
+      }
+      if (isEdit && id) {
+        fd.append("driver_Id", Number(id) as any);
+      }
+
+      const endpoint = isEdit
+        ? `${API_BASE}/Update_DriversInfo`
+        : `${API_BASE}/ADD_DriversInfo`;
+
+      const res = await fetch(endpoint, { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || "Submission failed");
+
+      Alert.alert("Success", isEdit ? "Driver updated successfully" : "Driver added successfully");
+      router.back();
+    } catch (err: any) {
+      Alert.alert("Error", err.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const handleSubmit = () => {
-    if (!name.trim()) {
-      Alert.alert('Validation', 'Please enter the driver name.');
-      return;
-    }
-    if (!licenseNumber.trim()) {
-      Alert.alert('Validation', 'Please enter the license number.');
-      return;
-    }
+  // ── Derived display values ────────────────────────────────────────────────
+  const photoSource = photoUri
+    ? { uri: photoUri }
+    : photoBase64
+      ? { uri: `data:image/jpeg;base64,${photoBase64}` }
+      : null;
 
-    if (isEdit && id) {
-      updateDriver(id, {
-        name: name.trim(),
-        initials: buildInitials(name),
-        phone: phone.trim() || undefined,
-        licenseNumber: licenseNumber.trim(),
-        licenseExpiry: licenseExpiry || undefined,
-        photoUri: photoUri ?? undefined,
-        licenseDocUri: licenseDocUri ?? undefined,
-      });
-    } else {
-      addDriver({
-        name: name.trim(),
-        initials: buildInitials(name),
-        phone: phone.trim() || undefined,
-        licenseNumber: licenseNumber.trim(),
-        licenseExpiry: licenseExpiry || undefined,
-        photoUri: photoUri ?? undefined,
-        licenseDocUri: licenseDocUri ?? undefined,
-        status: 'Offline',
-        assignedAmbulance: 'Unassigned',
-      });
-    }
-    router.back();
-  };
+  const hasLicenseDoc = !!(licenseDocUri || licenseDocBase64);
+  const licenseDocLabel = licenseDocUri
+    ? licenseDocUri.split("/").pop()
+    : licenseDocBase64
+      ? "Document uploaded"
+      : null;
 
-  const headerTitle = isView ? 'View Driver' : isEdit ? 'Edit Driver' : 'Add Driver';
+  const headerTitle = isView ? "View Driver" : isEdit ? "Edit Driver" : "Add Driver";
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <TransactionalHeader title={headerTitle} onBack={() => router.back()} />
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <ScrollView
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ── Mode badge ───────────────────────────────────────────── */}
           {isView && (
             <View style={styles.viewModeBanner}>
               <MaterialIcons name="visibility" size={16} color={AmbColors.primary} />
@@ -154,9 +207,7 @@ export default function AddDriverScreen() {
             </View>
           )}
 
-          {/* ══════════════════════════════════════════════════════════ */}
-          {/* SECTION 1: Personal Information                            */}
-          {/* ══════════════════════════════════════════════════════════ */}
+          {/* ── Section 1: Personal Information ── */}
           <View style={styles.sectionHeader}>
             <View style={styles.sectionNumberBadge}>
               <Text style={styles.sectionNumberText}>1</Text>
@@ -165,7 +216,6 @@ export default function AddDriverScreen() {
           </View>
 
           <View style={styles.formCard}>
-            {/* Profile photo */}
             <View style={styles.photoSection}>
               <TouchableOpacity
                 style={styles.photoCircle}
@@ -173,18 +223,18 @@ export default function AddDriverScreen() {
                 activeOpacity={isView ? 1 : 0.7}
                 disabled={isView}
               >
-                {photoUri ? (
-                  <Image source={{ uri: photoUri }} style={styles.photoImage} />
+                {photoSource ? (
+                  <Image source={photoSource} style={styles.photoImage} />
                 ) : (
                   <MaterialIcons name="camera-alt" size={28} color={`${AmbColors.primary}80`} />
                 )}
               </TouchableOpacity>
               <Text style={styles.photoHint}>
-                {isView ? (photoUri ? 'Profile photo' : 'No photo') : 'Tap to add photo'}
+                {isView ? (photoSource ? "Profile photo" : "No photo") : "Tap to add photo"}
               </Text>
+              {errors.photo ? <Text style={styles.errorText}>{errors.photo}</Text> : null}
             </View>
 
-            {/* Driver Name */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>FULL NAME</Text>
               <View style={[styles.inputRow, isView && styles.inputDisabled]}>
@@ -201,9 +251,9 @@ export default function AddDriverScreen() {
                   editable={!isView}
                 />
               </View>
+              {errors.name ? <Text style={styles.errorText}>{errors.name}</Text> : null}
             </View>
 
-            {/* Phone */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>PHONE NUMBER</Text>
               <View style={[styles.inputRow, isView && styles.inputDisabled]}>
@@ -212,20 +262,35 @@ export default function AddDriverScreen() {
                 </View>
                 <TextInput
                   style={styles.textInput}
-                  placeholder="e.g. +91 98765 43210"
+                  placeholder="e.g. 9876543210"
                   placeholderTextColor={`${AmbColors.outline}80`}
                   value={phone}
                   onChangeText={setPhone}
                   keyboardType="phone-pad"
+                  maxLength={10}
                   editable={!isView}
                 />
               </View>
+              {errors.phone ? <Text style={styles.errorText}>{errors.phone}</Text> : null}
             </View>
+
+            {/* Assigned ambulance — view only, mirrors web */}
+            {isView && (
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>ASSIGNED AMBULANCE</Text>
+                <View style={[styles.inputRow, styles.inputDisabled]}>
+                  <View style={styles.inputIconBox}>
+                    <MaterialIcons name="emergency" size={18} color={AmbColors.primary} />
+                  </View>
+                  <Text style={[styles.textInput, { paddingTop: 4 }]}>
+                    {assignedAmbulance || "Not Assigned"}
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
 
-          {/* ══════════════════════════════════════════════════════════ */}
-          {/* SECTION 2: License Information                             */}
-          {/* ══════════════════════════════════════════════════════════ */}
+          {/* ── Section 2: License Information ── */}
           <View style={styles.sectionHeader}>
             <View style={styles.sectionNumberBadge}>
               <Text style={styles.sectionNumberText}>2</Text>
@@ -234,7 +299,6 @@ export default function AddDriverScreen() {
           </View>
 
           <View style={styles.formCard}>
-            {/* License Number */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>LICENSE NUMBER</Text>
               <View style={[styles.inputRow, isView && styles.inputDisabled]}>
@@ -251,9 +315,9 @@ export default function AddDriverScreen() {
                   editable={!isView}
                 />
               </View>
+              {errors.license ? <Text style={styles.errorText}>{errors.license}</Text> : null}
             </View>
 
-            {/* License Expiry */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>LICENSE EXPIRY DATE</Text>
               <TouchableOpacity
@@ -265,17 +329,17 @@ export default function AddDriverScreen() {
                   <MaterialIcons name="calendar-today" size={18} color={AmbColors.primary} />
                 </View>
                 <Text style={[styles.dateText, !licenseExpiry && styles.datePlaceholder]}>
-                  {licenseExpiry || 'Select expiry date'}
+                  {licenseExpiry || "Select expiry date"}
                 </Text>
                 {!isView && (
                   <MaterialIcons name="expand-more" size={20} color={AmbColors.outline} style={styles.dateChevron} />
                 )}
               </TouchableOpacity>
-
+              {errors.expiry ? <Text style={styles.errorText}>{errors.expiry}</Text> : null}
               {showDatePicker && (
                 <DateTimePicker
                   mode="date"
-                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
                   value={licenseExpiry ? new Date(licenseExpiry) : new Date()}
                   onChange={handleDateChange}
                   minimumDate={new Date()}
@@ -283,42 +347,41 @@ export default function AddDriverScreen() {
               )}
             </View>
 
-            {/* License Document Upload */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>LICENSE DOCUMENT</Text>
               <TouchableOpacity
-                style={[styles.docUploadBox, licenseDocUri && styles.docUploadBoxDone]}
+                style={[styles.docUploadBox, hasLicenseDoc && styles.docUploadBoxDone]}
                 onPress={pickLicenseDoc}
                 activeOpacity={isView ? 1 : 0.7}
                 disabled={isView}
               >
-                {licenseDocUri ? (
+                {hasLicenseDoc ? (
                   <View style={styles.docUploadedRow}>
                     <MaterialIcons name="check-circle" size={22} color={AmbColors.tertiary} />
                     <Text style={styles.docUploadedName} numberOfLines={1}>
-                      {licenseDocUri.split('/').pop()}
+                      {licenseDocLabel}
                     </Text>
                   </View>
                 ) : (
                   <View style={styles.docUploadPlaceholder}>
                     <MaterialIcons name="upload-file" size={28} color={`${AmbColors.outline}60`} />
                     <Text style={styles.docUploadLabel}>
-                      {isView ? 'No document uploaded' : 'Tap to upload license copy'}
+                      {isView ? "No document uploaded" : "Tap to upload license copy"}
                     </Text>
                   </View>
                 )}
               </TouchableOpacity>
+              {errors.licenseDoc ? <Text style={styles.errorText}>{errors.licenseDoc}</Text> : null}
             </View>
           </View>
 
-          {/* ── Availability info ────────────────────────────────────── */}
           <View style={styles.availabilityCard}>
             <View style={styles.availabilityLeft}>
               <MaterialIcons name="schedule" size={20} color={AmbColors.tertiary} />
               <View>
                 <Text style={styles.availabilityTitle}>Availability</Text>
                 <Text style={styles.availabilitySub}>
-                  {isView ? 'Schedule not configured' : 'Set working hours after adding driver'}
+                  {isView ? "Schedule not configured" : "Set working hours after adding driver"}
                 </Text>
               </View>
             </View>
@@ -329,13 +392,21 @@ export default function AddDriverScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ── Footer submit (hidden in view mode) ─────────────────────── */}
       {!isView && (
         <View style={styles.footer}>
-          <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit} activeOpacity={0.85}>
-            <MaterialIcons name={isEdit ? 'save' : 'person-add'} size={20} color="#fff" />
+          <TouchableOpacity
+            style={[styles.submitBtn, submitting && { opacity: 0.7 }]}
+            onPress={handleSubmit}
+            activeOpacity={0.85}
+            disabled={submitting}
+          >
+            {submitting ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <MaterialIcons name={isEdit ? "save" : "person-add"} size={20} color="#fff" />
+            )}
             <Text style={styles.submitBtnText}>
-              {isEdit ? 'Save Changes' : 'Add Driver'}
+              {submitting ? "Saving..." : isEdit ? "Save Changes" : "Add Driver"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -344,241 +415,84 @@ export default function AddDriverScreen() {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: AmbColors.surface },
   scroll: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20 },
 
-  // View mode banner
   viewModeBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    flexDirection: "row", alignItems: "center", gap: 8,
     backgroundColor: `${AmbColors.primary}10`,
-    borderRadius: AmbRadius.md,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 16,
+    borderRadius: AmbRadius.md, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 16,
   },
-  viewModeBannerText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    color: AmbColors.primary,
-  },
+  viewModeBannerText: { fontFamily: "Inter_500Medium", fontSize: 13, color: AmbColors.primary },
 
-  // Section header
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 12,
-    marginTop: 4,
-  },
-  sectionNumberBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: AmbColors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sectionNumberText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-    color: '#ffffff',
-  },
-  sectionTitle: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 16,
-    color: AmbColors.onSurface,
-  },
+  sectionHeader: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12, marginTop: 4 },
+  sectionNumberBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: AmbColors.primary, justifyContent: "center", alignItems: "center" },
+  sectionNumberText: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: "#ffffff" },
+  sectionTitle: { fontFamily: "Inter_600SemiBold", fontSize: 16, color: AmbColors.onSurface },
 
-  // Form card
   formCard: {
     backgroundColor: AmbColors.surfaceContainerLowest,
-    borderRadius: AmbRadius.xl,
-    padding: 20,
-    gap: 18,
-    marginBottom: 20,
-    ...AmbShadow.subtle,
+    borderRadius: AmbRadius.xl, padding: 20, gap: 18, marginBottom: 20, ...AmbShadow.subtle,
   },
 
-  // Photo
-  photoSection: { alignItems: 'center', gap: 10 },
+  photoSection: { alignItems: "center", gap: 10 },
   photoCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: AmbColors.outlineVariant,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: AmbColors.surfaceContainerLow,
-    overflow: 'hidden',
+    width: 100, height: 100, borderRadius: 50, borderWidth: 2, borderStyle: "dashed",
+    borderColor: AmbColors.outlineVariant, justifyContent: "center", alignItems: "center",
+    backgroundColor: AmbColors.surfaceContainerLow, overflow: "hidden",
   },
-  photoImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-  },
-  photoHint: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    color: `${AmbColors.outline}aa`,
-  },
+  photoImage: { width: 100, height: 100, borderRadius: 50 },
+  photoHint: { fontFamily: "Inter_500Medium", fontSize: 13, color: `${AmbColors.outline}aa` },
 
-  // Field
-  fieldGroup: { gap: 8 },
-  fieldLabel: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 10,
-    color: AmbColors.onSurfaceVariant,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
+  fieldGroup: { gap: 6 },
+  fieldLabel: { fontFamily: "Inter_600SemiBold", fontSize: 10, color: AmbColors.onSurfaceVariant, letterSpacing: 1, textTransform: "uppercase" },
+  errorText: { fontFamily: "Inter_400Regular", fontSize: 11, color: AmbColors.error, marginTop: 2 },
+
   inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: AmbColors.surfaceContainerLow,
-    borderRadius: AmbRadius.md,
-    height: 50,
-    paddingRight: 14,
-    overflow: 'hidden',
+    flexDirection: "row", alignItems: "center", backgroundColor: AmbColors.surfaceContainerLow,
+    borderRadius: AmbRadius.md, height: 50, paddingRight: 14, overflow: "hidden",
   },
-  inputDisabled: {
-    backgroundColor: AmbColors.surfaceContainerHighest,
-    opacity: 0.7,
-  },
-  inputIconBox: {
-    width: 46,
-    height: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: `${AmbColors.primary}10`,
-  },
-  textInput: {
-    flex: 1,
-    paddingLeft: 12,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    color: AmbColors.onSurface,
-  },
+  inputDisabled: { backgroundColor: AmbColors.surfaceContainerHighest, opacity: 0.7 },
+  inputIconBox: { width: 46, height: 50, justifyContent: "center", alignItems: "center", backgroundColor: `${AmbColors.primary}10` },
+  textInput: { flex: 1, paddingLeft: 12, fontFamily: "Inter_400Regular", fontSize: 14, color: AmbColors.onSurface },
 
-  // Date picker row
   dateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: AmbColors.surfaceContainerLow,
-    borderRadius: AmbRadius.md,
-    height: 50,
-    overflow: 'hidden',
+    flexDirection: "row", alignItems: "center", backgroundColor: AmbColors.surfaceContainerLow,
+    borderRadius: AmbRadius.md, height: 50, overflow: "hidden",
   },
-  dateText: {
-    flex: 1,
-    paddingLeft: 12,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    color: AmbColors.onSurface,
-  },
-  datePlaceholder: {
-    color: `${AmbColors.outline}80`,
-  },
+  dateText: { flex: 1, paddingLeft: 12, fontFamily: "Inter_400Regular", fontSize: 14, color: AmbColors.onSurface },
+  datePlaceholder: { color: `${AmbColors.outline}80` },
   dateChevron: { marginRight: 12 },
 
-  // Document upload
   docUploadBox: {
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: AmbColors.outlineVariant,
-    borderRadius: AmbRadius.md,
-    height: 80,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderWidth: 1.5, borderStyle: "dashed", borderColor: AmbColors.outlineVariant,
+    borderRadius: AmbRadius.md, height: 80, justifyContent: "center", alignItems: "center",
     backgroundColor: AmbColors.surfaceContainerLow,
   },
-  docUploadBoxDone: {
-    borderColor: AmbColors.tertiary,
-    borderStyle: 'solid',
-    backgroundColor: `${AmbColors.tertiary}08`,
-  },
-  docUploadedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-  },
-  docUploadedName: {
-    flex: 1,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    color: AmbColors.tertiary,
-  },
-  docUploadPlaceholder: {
-    alignItems: 'center',
-    gap: 6,
-  },
-  docUploadLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    color: `${AmbColors.outline}bb`,
-  },
+  docUploadBoxDone: { borderColor: AmbColors.tertiary, borderStyle: "solid", backgroundColor: `${AmbColors.tertiary}08` },
+  docUploadedRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16 },
+  docUploadedName: { flex: 1, fontFamily: "Inter_500Medium", fontSize: 13, color: AmbColors.tertiary },
+  docUploadPlaceholder: { alignItems: "center", gap: 6 },
+  docUploadLabel: { fontFamily: "Inter_500Medium", fontSize: 12, color: `${AmbColors.outline}bb` },
 
-  // Availability card
   availabilityCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: AmbColors.surfaceContainerLowest,
-    borderRadius: AmbRadius.xl,
-    padding: 18,
-    ...AmbShadow.subtle,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    backgroundColor: AmbColors.surfaceContainerLowest, borderRadius: AmbRadius.xl, padding: 18, ...AmbShadow.subtle,
   },
-  availabilityLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  availabilityTitle: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    color: AmbColors.onSurface,
-  },
-  availabilitySub: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-    color: AmbColors.secondary,
-    marginTop: 2,
-  },
+  availabilityLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  availabilityTitle: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: AmbColors.onSurface },
+  availabilitySub: { fontFamily: "Inter_400Regular", fontSize: 11, color: AmbColors.secondary, marginTop: 2 },
 
-  // Footer
   footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    position: "absolute", bottom: 0, left: 0, right: 0,
     backgroundColor: AmbColors.surfaceContainerLowest,
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 24,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    ...AmbShadow.elevated,
+    paddingHorizontal: 20, paddingTop: 14, paddingBottom: 24,
+    borderTopLeftRadius: 24, borderTopRightRadius: 24, ...AmbShadow.elevated,
   },
   submitBtn: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 10,
-    height: 54,
-    backgroundColor: AmbColors.primary,
-    borderRadius: AmbRadius.md,
-    ...AmbShadow.card,
+    flexDirection: "row", justifyContent: "center", alignItems: "center",
+    gap: 10, height: 54, backgroundColor: AmbColors.primary, borderRadius: AmbRadius.md, ...AmbShadow.card,
   },
-  submitBtnText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 16,
-    color: '#ffffff',
-  },
+  submitBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 16, color: "#ffffff" },
 });
