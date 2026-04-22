@@ -29,11 +29,6 @@ export default function TripsScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.logo}>Jhilmil Homecare</Text>
-        </View>
-
         {/* Search */}
         <View style={styles.searchBox}>
           <MaterialIcons name="search" size={20} color="#888" />
@@ -523,15 +518,6 @@ function TripRow({ icon, text }: { icon: any; text: string }) {
 // });
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#F5F6F8" },
-
-  header: {
-    padding: 20,
-  },
-  logo: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#0f766e",
-  },
 
   searchBox: {
     marginHorizontal: 20,

@@ -20,7 +20,6 @@ import {
   AmbShadow,
 } from "@/src/features/ambulance/constants/ambulanceTheme";
 
-import AmbulanceTopBar from "@/src/features/ambulance/components/AmbulanceTopBar";
 import { AuthContext } from "@/src/core/context/AuthContext";
 
 const API_BASE = "https://coreapi-service-111763741518.asia-south1.run.app/api/Ambulance";
@@ -103,7 +102,10 @@ export default function DriversScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <AmbulanceTopBar avatarInitials="JH" />
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Driver List</Text>
+        <Text style={styles.headerSubtitle}>Browse and manage drivers</Text>
+      </View>
 
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -310,6 +312,10 @@ function DriverCard({
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: AmbColors.surface },
   scroll: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 24 },
+
+  header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
+  headerTitle: { fontSize: 24, fontWeight: "bold", color: AmbColors.onSurface },
+  headerSubtitle: { color: AmbColors.secondary, marginTop: 4, fontSize: 13 },
 
   searchWrapper: {
     flexDirection: "row",
