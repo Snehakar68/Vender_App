@@ -19,6 +19,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import MapView, { Marker } from "react-native-maps";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { router } from "expo-router";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const C = {
@@ -300,8 +301,11 @@ export default function LiveTrackingScreen() {
       <View style={s.headerCard}>
         {/* Title row */}
         <View style={s.titleRow}>
+          <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
+            <MaterialIcons name="arrow-back" size={22} color={C.text} />
+          </TouchableOpacity>
           <Text style={s.titleEmoji}>🚑</Text>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={s.title}>Live Ambulance Tracking</Text>
             <Text style={s.subtitle}>Monitor real-time ambulance movement and operational status</Text>
           </View>
@@ -410,11 +414,12 @@ const s = StyleSheet.create({
   },
   titleRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: 10,
     marginBottom: 12,
   },
-  titleEmoji: { fontSize: 26, marginTop: 2 },
+  backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: "#F1F5F9", justifyContent: "center", alignItems: "center" },
+  titleEmoji: { fontSize: 26 },
   title: {
     fontSize: 18,
     fontWeight: "700",
