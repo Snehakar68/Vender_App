@@ -12,11 +12,14 @@ import {
   Image,
   ActivityIndicator,
   Dimensions,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
+import * as Sharing from "expo-sharing";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   AmbColors,
@@ -25,6 +28,7 @@ import {
 } from "@/src/features/ambulance/constants/ambulanceTheme";
 import TransactionalHeader from "@/src/features/ambulance/components/TransactionalHeader";
 import { AuthContext } from "@/src/core/context/AuthContext";
+import ActionModal from "@/src/shared/components/ActionModal";
 
 const API_BASE = "https://coreapi-service-111763741518.asia-south1.run.app/api/Ambulance";
 
@@ -71,10 +75,14 @@ export default function AddDriverScreen() {
   // license doc: same pattern
   const [licenseDocUri, setLicenseDocUri] = useState<string | null>(null);
   const [licenseDocBase64, setLicenseDocBase64] = useState<string | null>(null);
+  const [licenseDocMimeType, setLicenseDocMimeType] = useState<string | null>(null);
+  const [licenseDocName, setLicenseDocName] = useState<string | null>(null);
 
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [viewingImageUri, setViewingImageUri] = useState<string | null>(null);
 
   // ── Prefill from params (mirrors web initialData) ─────────────────────────
   useEffect(() => {
@@ -105,16 +113,35 @@ export default function AddDriverScreen() {
 
   const pickLicenseDoc = async () => {
     if (isView) return;
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsEditing: false,
-      quality: 0.8,
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ["image/*", "application/pdf"],
+      copyToCacheDirectory: true,
     });
-    if (!result.canceled) {
-      setLicenseDocUri(result.assets[0].uri);
-      setLicenseDocBase64(null);
+    if (result.canceled) return;
+    const file = result.assets[0];
+    if (file.size && file.size > 204800) {
+      setErrors(prev => ({ ...prev, licenseDoc: "File must be under 200KB" }));
+      return;
+    }
+    setLicenseDocUri(file.uri);
+    setLicenseDocName(file.name);
+    setLicenseDocMimeType(file.mimeType ?? "image/jpeg");
+    setLicenseDocBase64(null);
+  };
+
+  const viewLicenseDoc = async () => {
+    if (licenseDocUri) {
+      if (licenseDocMimeType === "application/pdf") {
+        await Sharing.shareAsync(licenseDocUri, { mimeType: "application/pdf" });
+      } else {
+        setViewingImageUri(licenseDocUri);
+      }
+    } else if (licenseDocBase64) {
+      setViewingImageUri(`data:image/jpeg;base64,${licenseDocBase64}`);
     }
   };
+
+  const clearError = (key: string) => setErrors(prev => ({ ...prev, [key]: "" }));
 
   const handleDateChange = (_: unknown, date?: Date) => {
     setShowDatePicker(false);
@@ -151,7 +178,8 @@ export default function AddDriverScreen() {
         fd.append("photo", { uri: photoUri, name: "photo.jpg", type: "image/jpeg" } as any);
       }
       if (licenseDocUri) {
-        fd.append("license", { uri: licenseDocUri, name: "license.jpg", type: "image/jpeg" } as any);
+        const ext = licenseDocMimeType === "application/pdf" ? "pdf" : "jpg";
+        fd.append("license", { uri: licenseDocUri, name: `license.${ext}`, type: licenseDocMimeType ?? "image/jpeg" } as any);
       }
       if (isEdit && id) {
         fd.append("driver_Id", Number(id) as any);
@@ -165,8 +193,7 @@ export default function AddDriverScreen() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message || "Submission failed");
 
-      Alert.alert("Success", isEdit ? "Driver updated successfully" : "Driver added successfully");
-      router.back();
+      setShowSuccessModal(true);
     } catch (err: any) {
       Alert.alert("Error", err.message);
     } finally {
@@ -182,11 +209,9 @@ export default function AddDriverScreen() {
       : null;
 
   const hasLicenseDoc = !!(licenseDocUri || licenseDocBase64);
-  const licenseDocLabel = licenseDocUri
-    ? licenseDocUri.split("/").pop()
-    : licenseDocBase64
-      ? "Document uploaded"
-      : null;
+  const licenseDocLabel = licenseDocName
+    ?? (licenseDocUri ? licenseDocUri.split("/").pop() : null)
+    ?? (licenseDocBase64 ? "Document uploaded" : null);
 
   const headerTitle = isView ? "View Driver" : isEdit ? "Edit Driver" : "Add Driver";
 
@@ -246,7 +271,7 @@ export default function AddDriverScreen() {
                   placeholder="e.g. Rahul Singh"
                   placeholderTextColor={`${AmbColors.outline}80`}
                   value={name}
-                  onChangeText={setName}
+                  onChangeText={v => { setName(v); clearError("name"); }}
                   autoCapitalize="words"
                   editable={!isView}
                 />
@@ -265,7 +290,7 @@ export default function AddDriverScreen() {
                   placeholder="e.g. 9876543210"
                   placeholderTextColor={`${AmbColors.outline}80`}
                   value={phone}
-                  onChangeText={setPhone}
+                  onChangeText={v => { setPhone(v); clearError("phone"); }}
                   keyboardType="phone-pad"
                   maxLength={10}
                   editable={!isView}
@@ -310,7 +335,7 @@ export default function AddDriverScreen() {
                   placeholder="e.g. DL-12345"
                   placeholderTextColor={`${AmbColors.outline}80`}
                   value={licenseNumber}
-                  onChangeText={setLicenseNumber}
+                  onChangeText={v => { setLicenseNumber(v); clearError("license"); }}
                   autoCapitalize="characters"
                   editable={!isView}
                 />
@@ -351,9 +376,9 @@ export default function AddDriverScreen() {
               <Text style={styles.fieldLabel}>LICENSE DOCUMENT</Text>
               <TouchableOpacity
                 style={[styles.docUploadBox, hasLicenseDoc && styles.docUploadBoxDone]}
-                onPress={pickLicenseDoc}
-                activeOpacity={isView ? 1 : 0.7}
-                disabled={isView}
+                onPress={hasLicenseDoc ? viewLicenseDoc : isView ? undefined : pickLicenseDoc}
+                activeOpacity={isView && !hasLicenseDoc ? 1 : 0.7}
+                disabled={isView && !hasLicenseDoc}
               >
                 {hasLicenseDoc ? (
                   <View style={styles.docUploadedRow}>
@@ -361,12 +386,20 @@ export default function AddDriverScreen() {
                     <Text style={styles.docUploadedName} numberOfLines={1}>
                       {licenseDocLabel}
                     </Text>
+                    {!isView && (
+                      <TouchableOpacity
+                        onPress={pickLicenseDoc}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <MaterialIcons name="edit" size={16} color={AmbColors.secondary} />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 ) : (
                   <View style={styles.docUploadPlaceholder}>
                     <MaterialIcons name="upload-file" size={28} color={`${AmbColors.outline}60`} />
                     <Text style={styles.docUploadLabel}>
-                      {isView ? "No document uploaded" : "Tap to upload license copy"}
+                      {isView ? "No document uploaded" : "Tap to upload (PDF or image, max 200KB)"}
                     </Text>
                   </View>
                 )}
@@ -411,6 +444,36 @@ export default function AddDriverScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      <ActionModal
+        visible={showSuccessModal}
+        title={isEdit ? "Driver Updated" : "Driver Added Successfully"}
+        message={isEdit ? "Driver information has been updated." : "The driver has been added to your fleet."}
+        confirmText="OK"
+        onConfirm={() => { setShowSuccessModal(false); router.back(); }}
+        // onCancel={() => { setShowSuccessModal(false); router.back(); }}
+        iconName="check-circle"
+      />
+
+      <Modal
+        visible={!!viewingImageUri}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewingImageUri(null)}
+      >
+        <View style={styles.imageViewerOverlay}>
+          <TouchableOpacity style={styles.imageViewerClose} onPress={() => setViewingImageUri(null)}>
+            <MaterialIcons name="close" size={28} color="#fff" />
+          </TouchableOpacity>
+          {viewingImageUri && (
+            <Image
+              source={{ uri: viewingImageUri }}
+              style={styles.imageViewerImg}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -495,4 +558,13 @@ const styles = StyleSheet.create({
     gap: 10, height: 54, backgroundColor: AmbColors.primary, borderRadius: AmbRadius.md, ...AmbShadow.card,
   },
   submitBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 16, color: "#ffffff" },
+
+  imageViewerOverlay: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.92)", justifyContent: "center", alignItems: "center",
+  },
+  imageViewerClose: { position: "absolute", top: 48, right: 20, zIndex: 10, padding: 8 },
+  imageViewerImg: {
+    width: Dimensions.get("window").width,
+    height: Dimensions.get("window").height * 0.75,
+  },
 });

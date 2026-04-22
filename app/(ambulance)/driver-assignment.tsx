@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { AuthContext } from "@/src/core/context/AuthContext";
+import { router } from "expo-router";
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 const API_BASE = "https://coreapi-service-111763741518.asia-south1.run.app/api/Ambulance";
@@ -440,8 +441,16 @@ const auth = useContext(AuthContext);
     <SafeAreaView style={s.safe} edges={["top"]}>
       {/* Header */}
       <View style={s.header}>
-        <Text style={s.headerTitle}>Driver Assignment</Text>
-        <Text style={s.headerSub}>Manage and assign drivers to ambulances</Text>
+        <View style={s.headerRow}>
+          <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
+            <MaterialIcons name="arrow-back" size={22} color={C.text} />
+          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <Text style={s.headerTitle} numberOfLines={1}>Driver Assignment</Text>
+            <Text style={s.headerSub}>Manage and assign drivers to ambulances</Text>
+          </View>
+          <View style={{ width: 40 }} />
+        </View>
       </View>
 
       <ScrollView
@@ -581,8 +590,10 @@ const s = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  headerTitle: { fontSize: 20, fontWeight: "700", color: C.text, letterSpacing: -0.3 },
-  headerSub:   { fontSize: 12, color: C.textMuted, marginTop: 3 },
+  headerRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#F1F5F9", justifyContent: "center", alignItems: "center" },
+  headerTitle: { fontSize: 18, fontWeight: "700", color: C.text, letterSpacing: -0.3 },
+  headerSub:   { fontSize: 12, color: C.textMuted, marginTop: 2 },
 
   scroll: { padding: 16, paddingBottom: 32 },
 

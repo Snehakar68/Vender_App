@@ -601,6 +601,7 @@ import { router } from "expo-router";
 import { BackHandler } from "react-native";
 import { useFocusEffect } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import ActionModal from "@/src/shared/components/ActionModal";
 
 // --- Constants & Types ---
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -619,8 +620,10 @@ const AmbColors = {
 
 const AmbRadius = { md: 8, xl: 16, xxl: 24 };
 
-const API_ADD = "https://coreapi-service-111763741518.asia-south1.run.app/api/Ambulance/ADD_Ambulance_Info";
-const API_UPDATE = "https://coreapi-service-111763741518.asia-south1.run.app/api/Ambulance/Update_Ambulance_Info";
+const API_ADD =
+  "https://coreapi-service-111763741518.asia-south1.run.app/api/Ambulance/ADD_Ambulance_Info";
+const API_UPDATE =
+  "https://coreapi-service-111763741518.asia-south1.run.app/api/Ambulance/Update_Ambulance_Info";
 
 type FileType = {
   uri: string;
@@ -682,12 +685,12 @@ export default function AddAmbulanceScreen({ route }: any) {
   const [loading, setLoading] = useState(false);
   const [vendorId, setVendorId] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState<null | keyof FormType>(null);
-  const [successMessage, setSuccessMessage] = useState("");
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   // --- Logic Helpers ---
   const isPdfBase64 = (base64: string) => base64?.startsWith("JVBER");
-  
+
   const normalizeType = (type: string) => {
     if (!type) return "";
     const t = type.toLowerCase();
@@ -721,35 +724,46 @@ export default function AddAmbulanceScreen({ route }: any) {
       ...initialData,
       ambulance_type: normalizeType(initialData?.ambulance_type),
       rate_Km: initialData?.rate_Km?.toString() || "",
-      Min_Rate: (initialData?.min_Rate || initialData?.Min_Rate)?.toString() || "",
+      Min_Rate:
+        (initialData?.min_Rate || initialData?.Min_Rate)?.toString() || "",
       rc_old: docs?.rc || null,
       fitness_old: docs?.fitness || null,
       insurance_old: docs?.insurence || null,
       permit_old: docs?.permit || null,
-      rcPreview: docs?.rc ? (isPdfBase64(docs.rc) ? "PDF" : `data:image/jpeg;base64,${docs.rc}`) : null,
-      fitnessPreview: docs?.fitness ? (isPdfBase64(docs.fitness) ? "PDF" : `data:image/jpeg;base64,${docs.fitness}`) : null,
-      insurancePreview: docs?.insurence ? (isPdfBase64(docs.insurence) ? "PDF" : `data:image/jpeg;base64,${docs.insurence}`) : null,
-      permitPreview: docs?.permit ? (isPdfBase64(docs.permit) ? "PDF" : `data:image/jpeg;base64,${docs.permit}`) : null,
+      rcPreview: docs?.rc
+        ? isPdfBase64(docs.rc)
+          ? "PDF"
+          : `data:image/jpeg;base64,${docs.rc}`
+        : null,
+      fitnessPreview: docs?.fitness
+        ? isPdfBase64(docs.fitness)
+          ? "PDF"
+          : `data:image/jpeg;base64,${docs.fitness}`
+        : null,
+      insurancePreview: docs?.insurence
+        ? isPdfBase64(docs.insurence)
+          ? "PDF"
+          : `data:image/jpeg;base64,${docs.insurence}`
+        : null,
+      permitPreview: docs?.permit
+        ? isPdfBase64(docs.permit)
+          ? "PDF"
+          : `data:image/jpeg;base64,${docs.permit}`
+        : null,
     });
   }, [initialData]);
 
-  useEffect(() => {
-    if (!successMessage) return;
-    const timer = setTimeout(() => {
-      setSuccessMessage("");
-      router.replace("/(ambulance)/ambulances");
-    }, 4000);
-    return () => clearTimeout(timer);
-  }, [successMessage]);
-
   useFocusEffect(
     useCallback(() => {
-      const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-        router.replace("/(ambulance)/ambulances");
-        return true;
-      });
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        () => {
+          router.replace("/(ambulance)/ambulances");
+          return true;
+        },
+      );
       return () => subscription.remove();
-    }, [])
+    }, []),
   );
 
   const set = (key: keyof FormType, value: any) => {
@@ -766,7 +780,8 @@ export default function AddAmbulanceScreen({ route }: any) {
     if (!form.Min_Rate) e.Min_Rate = "Min rate required";
     if (!form.rc && !form.rc_old) e.rc = "RC required";
     if (!form.fitness && !form.fitness_old) e.fitness = "Fitness required";
-    if (!form.insurance && !form.insurance_old) e.insurance = "Insurance required";
+    if (!form.insurance && !form.insurance_old)
+      e.insurance = "Insurance required";
     if (!form.permit && !form.permit_old) e.permit = "Permit required";
     if (!form.insuence_expiry) e.insuence_expiry = "expiry date Required";
     if (!form.fitness_expiry) e.fitness_expiry = "expiry date Required";
@@ -775,31 +790,35 @@ export default function AddAmbulanceScreen({ route }: any) {
     return Object.keys(e).length === 0;
   };
 
- const pickFile = async (field: keyof FormType) => {
-  const result = await DocumentPicker.getDocumentAsync({
-    type: ["image/*", "application/pdf"],
-  });
+  const pickFile = async (field: keyof FormType) => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ["image/*", "application/pdf"],
+    });
 
-  if (!result.canceled) {
-    const file = result.assets?.[0];
-    if (!file) return;
-    
-    const MAX_FILE_SIZE = 204800; // 200KB
+    if (!result.canceled) {
+      const file = result.assets?.[0];
+      if (!file) return;
 
-    if (file.size && file.size > MAX_FILE_SIZE) {
-      // 1. Clear the form data for this field
-      setForm(prev => ({ ...prev, [field]: null, [`${field}Preview`]: null }));
-      // 2. Set the specific error message
-      setErrors(prev => ({ ...prev, [field]: "File must be < 200KB" }));
-      return;
+      const MAX_FILE_SIZE = 204800; // 200KB
+
+      if (file.size && file.size > MAX_FILE_SIZE) {
+        // 1. Clear the form data for this field
+        setForm((prev) => ({
+          ...prev,
+          [field]: null,
+          [`${field}Preview`]: null,
+        }));
+        // 2. Set the specific error message
+        setErrors((prev) => ({ ...prev, [field]: "File must be < 200KB" }));
+        return;
+      }
+
+      // If valid, set the file AND clear any existing error for this field
+      set(field, file);
+      set((field + "Preview") as keyof FormType, file.uri);
+      setErrors((prev) => ({ ...prev, [field]: "" })); // Clear error on success
     }
-
-    // If valid, set the file AND clear any existing error for this field
-    set(field, file);
-    set((field + "Preview") as keyof FormType, file.uri);
-    setErrors(prev => ({ ...prev, [field]: "" })); // Clear error on success
-  }
-};
+  };
 
   const onSubmit = async () => {
     if (!validate()) return;
@@ -815,7 +834,8 @@ export default function AddAmbulanceScreen({ route }: any) {
       fd.append("fitness_expiry", form.fitness_expiry);
       fd.append("permit_expiry", form.permit_expiry);
 
-      if (isEdit && form.ambulance_id) fd.append("ambulance_id", String(form.ambulance_id));
+      if (isEdit && form.ambulance_id)
+        fd.append("ambulance_id", String(form.ambulance_id));
 
       const appendDocument = (key: string, newFile: any, oldData: any) => {
         if (newFile && newFile.uri) {
@@ -825,8 +845,14 @@ export default function AddAmbulanceScreen({ route }: any) {
             type: newFile.mimeType || "image/jpeg",
           } as any);
         } else if (isEdit && oldData) {
-          const uri = oldData.startsWith("data:") ? oldData : `data:image/jpeg;base64,${oldData}`;
-          fd.append(key, { uri, name: `${key}.jpg`, type: "image/jpeg" } as any);
+          const uri = oldData.startsWith("data:")
+            ? oldData
+            : `data:image/jpeg;base64,${oldData}`;
+          fd.append(key, {
+            uri,
+            name: `${key}.jpg`,
+            type: "image/jpeg",
+          } as any);
         }
       };
 
@@ -838,12 +864,15 @@ export default function AddAmbulanceScreen({ route }: any) {
       const res = await fetch(isEdit ? API_UPDATE : API_ADD, {
         method: "POST",
         body: fd,
-        headers: { "Accept": "application/json", "Content-Type": "multipart/form-data" },
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "multipart/form-data",
+        },
       });
 
       const responseData = await res.json();
       if (res.ok) {
-        setSuccessMessage(isEdit ? "Ambulance updated successfully" : "Ambulance added successfully");
+        setShowSuccessModal(true);
       } else {
         Alert.alert("Error", responseData.message || "Something went wrong");
       }
@@ -857,57 +886,62 @@ export default function AddAmbulanceScreen({ route }: any) {
     router.replace("/(ambulance)/ambulances");
   };
   const onDateChange = (event: any, selectedDate?: Date) => {
-  // 1. Hide the picker immediately (critical for Android)
-  const currentField = showPicker;
-  setShowPicker(null);
+    // 1. Hide the picker immediately (critical for Android)
+    const currentField = showPicker;
+    setShowPicker(null);
 
-  // 2. Only update if the user pressed "OK" (event.type === "set")
-  if (event.type === "set" && selectedDate && currentField) {
-    const formatted = formatDate(selectedDate); // uses your YYYY-MM-DD helper
-    set(currentField, formatted);
-  }
-};
+    // 2. Only update if the user pressed "OK" (event.type === "set")
+    if (event.type === "set" && selectedDate && currentField) {
+      const formatted = formatDate(selectedDate); // uses your YYYY-MM-DD helper
+      set(currentField, formatted);
+    }
+  };
 
   return (
-   <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-    <View style={styles.stickyHeader}>
-    <TouchableOpacity onPress={handleBack} style={styles.backBtn} activeOpacity={0.7}>
-      <MaterialIcons name="arrow-back" size={24} color={AmbColors.onSurface} />
-    </TouchableOpacity>
-    {/* Ensure this is a clean string */}
-    <Text style={styles.headerTitle}>
-      {isEdit ? "Edit Ambulance" : "Add Ambulance"}
-    </Text>
-    <View style={{ width: 40 }} />
-  </View>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView 
-          ref={scrollRef} 
-          contentContainerStyle={styles.scroll} 
+    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+      <View style={styles.stickyHeader}>
+        <TouchableOpacity
+          onPress={handleBack}
+          style={styles.backBtn}
+          activeOpacity={0.7}
+        >
+          <MaterialIcons
+            name="arrow-back"
+            size={24}
+            color={AmbColors.onSurface}
+          />
+        </TouchableOpacity>
+        {/* Ensure this is a clean string */}
+        <Text style={styles.headerTitle}>
+          {isEdit ? "Edit Ambulance" : "Add Ambulance"}
+        </Text>
+        <View style={{ width: 40 }} />
+      </View>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
         >
-          
-          {successMessage ? (
-            <View style={styles.successBanner}>
-              <MaterialIcons name="check-circle" size={18} color="#065F46" />
-              <Text style={styles.successText}>{successMessage}</Text>
-            </View>
-          ) : null}
-
           {/* Section 1: Basic Details */}
           <View style={styles.sectionHeader}>
-            <View style={styles.sectionNumberBadge}><Text style={styles.sectionNumberText}>1</Text></View>
+            <View style={styles.sectionNumberBadge}>
+              <Text style={styles.sectionNumberText}>1</Text>
+            </View>
             <Text style={styles.sectionTitle}>Ambulance Details</Text>
           </View>
 
           <View style={styles.formCard}>
-            <CustomInput 
-              label="VEHICLE NUMBER" 
+            <CustomInput
+              label="VEHICLE NUMBER"
               icon="directions-car"
-              value={form.vehical_number} 
+              value={form.vehical_number}
               placeholder="e.g. MH 12 AB 1234"
               onChange={(v: string) => set("vehical_number", v)}
-              error={errors.vehical_number} 
+              error={errors.vehical_number}
             />
 
             <Text style={styles.fieldLabel}>AMBULANCE TYPE</Text>
@@ -916,72 +950,123 @@ export default function AddAmbulanceScreen({ route }: any) {
                 <TouchableOpacity
                   key={type}
                   activeOpacity={0.7}
-                  style={[styles.typeOption, form.ambulance_type === type && styles.typeOptionActive]}
+                  style={[
+                    styles.typeOption,
+                    form.ambulance_type === type && styles.typeOptionActive,
+                  ]}
                   onPress={() => set("ambulance_type", type)}
                 >
-                  <MaterialIcons 
+                  <MaterialIcons
                     name={type === "Basic" ? "bolt" : "emergency"}
-                    size={18} 
-                    color={form.ambulance_type === type ? "#fff" : AmbColors.primary} 
+                    size={18}
+                    color={
+                      form.ambulance_type === type ? "#fff" : AmbColors.primary
+                    }
                   />
-                  <Text style={[styles.typeText, form.ambulance_type === type && styles.typeTextActive]}>{type}</Text>
+                  <Text
+                    style={[
+                      styles.typeText,
+                      form.ambulance_type === type && styles.typeTextActive,
+                    ]}
+                  >
+                    {type}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>
-            {errors.ambulance_type && <Text style={styles.errorText}>{errors.ambulance_type}</Text>}
+            {errors.ambulance_type && (
+              <Text style={styles.errorText}>{errors.ambulance_type}</Text>
+            )}
 
-           <View style={{ marginTop: 10 }}>
-  <CustomInput 
-    label="RATE / KM" 
-    icon="currency-rupee"
-    keyboardType="numeric"
-    value={form.rate_Km} 
-    onChange={(v: string) => set("rate_Km", v)}
-    error={errors.rate_Km} 
-  />
-  <CustomInput 
-    label="MIN RATE" 
-    icon="payments"
-    keyboardType="numeric"
-    value={form.Min_Rate} 
-    onChange={(v: string) => set("Min_Rate", v)}
-    error={errors.Min_Rate} 
-  />
-</View>
+            <View style={{ marginTop: 10 }}>
+              <CustomInput
+                label="RATE / KM"
+                icon="currency-rupee"
+                keyboardType="numeric"
+                value={form.rate_Km}
+                onChange={(v: string) => set("rate_Km", v)}
+                error={errors.rate_Km}
+              />
+              <CustomInput
+                label="MIN RATE"
+                icon="payments"
+                keyboardType="numeric"
+                value={form.Min_Rate}
+                onChange={(v: string) => set("Min_Rate", v)}
+                error={errors.Min_Rate}
+              />
+            </View>
           </View>
 
           {/* Section 2: Documents (Uploads) */}
           <View style={styles.sectionHeader}>
-            <View style={styles.sectionNumberBadge}><Text style={styles.sectionNumberText}>2</Text></View>
+            <View style={styles.sectionNumberBadge}>
+              <Text style={styles.sectionNumberText}>2</Text>
+            </View>
             <Text style={styles.sectionTitle}>Required Documents</Text>
           </View>
 
           <View style={styles.formCard}>
-            <Text style={styles.helperText}>Upload clear images or PDF copies (Max 200KB)</Text>
-            
+            <Text style={styles.helperText}>
+              Upload clear images or PDF copies (Max 200KB)
+            </Text>
 
-      
-            
             {/* Each DocItem now takes full width automatically because we removed docGrid row */}
             <View style={styles.fullWidthDocStack}>
-              <DocItem label="RC Copy" file={form.rcPreview} error={errors.rc} onPress={() => pickFile("rc")} />
-              <DocItem label="Fitness Certificate" file={form.fitnessPreview} error={errors.fitness} onPress={() => pickFile("fitness")} />
-              <DocItem label="Insurance Policy" file={form.insurancePreview} error={errors.insurance} onPress={() => pickFile("insurance")} />
-              <DocItem label="Vehicle Permit" file={form.permitPreview} error={errors.permit} onPress={() => pickFile("permit")} />
+              <DocItem
+                label="RC Copy"
+                file={form.rcPreview}
+                error={errors.rc}
+                onPress={() => pickFile("rc")}
+              />
+              <DocItem
+                label="Fitness Certificate"
+                file={form.fitnessPreview}
+                error={errors.fitness}
+                onPress={() => pickFile("fitness")}
+              />
+              <DocItem
+                label="Insurance Policy"
+                file={form.insurancePreview}
+                error={errors.insurance}
+                onPress={() => pickFile("insurance")}
+              />
+              <DocItem
+                label="Vehicle Permit"
+                file={form.permitPreview}
+                error={errors.permit}
+                onPress={() => pickFile("permit")}
+              />
             </View>
-          
           </View>
 
           {/* Section 3: Expiry Dates */}
           <View style={styles.sectionHeader}>
-            <View style={styles.sectionNumberBadge}><Text style={styles.sectionNumberText}>3</Text></View>
+            <View style={styles.sectionNumberBadge}>
+              <Text style={styles.sectionNumberText}>3</Text>
+            </View>
             <Text style={styles.sectionTitle}>Validity & Expiry</Text>
           </View>
 
           <View style={[styles.formCard, { marginBottom: 40 }]}>
-            <DateInput label="INSURANCE EXPIRY" value={form.insuence_expiry} error={errors.insuence_expiry} onPress={() => setShowPicker("insuence_expiry")} />
-            <DateInput label="FITNESS EXPIRY" value={form.fitness_expiry} error={errors.fitness_expiry} onPress={() => setShowPicker("fitness_expiry")} />
-            <DateInput label="PERMIT EXPIRY" value={form.permit_expiry} error={errors.permit_expiry} onPress={() => setShowPicker("permit_expiry")} />
+            <DateInput
+              label="INSURANCE EXPIRY"
+              value={form.insuence_expiry}
+              error={errors.insuence_expiry}
+              onPress={() => setShowPicker("insuence_expiry")}
+            />
+            <DateInput
+              label="FITNESS EXPIRY"
+              value={form.fitness_expiry}
+              error={errors.fitness_expiry}
+              onPress={() => setShowPicker("fitness_expiry")}
+            />
+            <DateInput
+              label="PERMIT EXPIRY"
+              value={form.permit_expiry}
+              error={errors.permit_expiry}
+              onPress={() => setShowPicker("permit_expiry")}
+            />
           </View>
 
           {/* Bottom Padding for Footer */}
@@ -990,36 +1075,75 @@ export default function AddAmbulanceScreen({ route }: any) {
       </KeyboardAvoidingView>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.submitBtn} onPress={onSubmit} disabled={loading} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={styles.submitBtn}
+          onPress={onSubmit}
+          disabled={loading}
+          activeOpacity={0.8}
+        >
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
             <>
-              <MaterialIcons name={isEdit ? "save" : "add-circle"} size={22} color="#fff" />
-              <Text style={styles.submitBtnText}>{isEdit ? "Save Changes" : "Add Ambulance"}</Text>
+              <MaterialIcons
+                name={isEdit ? "save" : "add-circle"}
+                size={22}
+                color="#fff"
+              />
+              <Text style={styles.submitBtnText}>
+                {isEdit ? "Save Changes" : "Add Ambulance"}
+              </Text>
             </>
           )}
         </TouchableOpacity>
       </View>
+      <ActionModal
+        visible={showSuccessModal}
+        title={isEdit ? "Ambulance Updated" : "Ambulance Added Successfully"}
+        message={
+          isEdit
+            ? "Ambulance information has been updated."
+            : "The ambulance has been registered in your fleet."
+        }
+        confirmText="OK"
+        onConfirm={() => {
+          setShowSuccessModal(false);
+          router.back();
+        }}
+        // onCancel={() => {
+        //   setShowSuccessModal(false);
+        //   router.back();
+        // }}
+        iconName="check-circle"
+      />
       {/* ... DateTimePicker remains the same ... */}
       {showPicker && (
-  <DateTimePicker
-    // Convert string back to Date object, or default to today
-    value={form[showPicker] ? new Date(form[showPicker] as string) : new Date()}
-    mode="date"
-    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-    onChange={onDateChange}
-    // THIS LINE DISABLES PREVIOUS DATES
-    minimumDate={new Date()} 
-  />
-)}
+        <DateTimePicker
+          // Convert string back to Date object, or default to today
+          value={
+            form[showPicker] ? new Date(form[showPicker] as string) : new Date()
+          }
+          mode="date"
+          display={Platform.OS === "ios" ? "spinner" : "default"}
+          onChange={onDateChange}
+          // THIS LINE DISABLES PREVIOUS DATES
+          minimumDate={new Date()}
+        />
+      )}
     </SafeAreaView>
   );
 }
 
 // --- Sub Components ---
 
-const CustomInput = ({ label, icon, value, onChange, error, ...props }: any) => (
+const CustomInput = ({
+  label,
+  icon,
+  value,
+  onChange,
+  error,
+  ...props
+}: any) => (
   <View style={styles.fieldGroup}>
     <Text style={styles.fieldLabel}>{label}</Text>
     <View style={[styles.inputRow, error && { borderColor: AmbColors.error }]}>
@@ -1041,16 +1165,25 @@ const CustomInput = ({ label, icon, value, onChange, error, ...props }: any) => 
 const DateInput = ({ label, value, onPress, error }: any) => (
   <View style={styles.fieldGroup}>
     <Text style={styles.fieldLabel}>{label}</Text>
-    <TouchableOpacity 
+    <TouchableOpacity
       style={[
-        styles.dateRow, 
+        styles.dateRow,
         error && { borderColor: AmbColors.error },
-        !value && { opacity: 0.7 } // Slight "blur" effect if no date is picked yet
-      ]} 
+        !value && { opacity: 0.7 }, // Slight "blur" effect if no date is picked yet
+      ]}
       onPress={onPress}
     >
-      <MaterialIcons name="calendar-today" size={18} color={AmbColors.primary} />
-      <Text style={[styles.dateText, !value && { color: `${AmbColors.secondary}60` }]}>
+      <MaterialIcons
+        name="calendar-today"
+        size={18}
+        color={AmbColors.primary}
+      />
+      <Text
+        style={[
+          styles.dateText,
+          !value && { color: `${AmbColors.secondary}60` },
+        ]}
+      >
         {value || "Select Expiry Date"}
       </Text>
       <MaterialIcons name="expand-more" size={20} color={AmbColors.secondary} />
@@ -1060,31 +1193,59 @@ const DateInput = ({ label, value, onPress, error }: any) => (
 );
 
 const DocItem = ({ label, file, onPress, error }: any) => {
-  const isPdf = file === "PDF" || file?.includes("application/pdf") || file?.toLowerCase().includes(".pdf");
+  const isPdf =
+    file === "PDF" ||
+    file?.includes("application/pdf") ||
+    file?.toLowerCase().includes(".pdf");
   return (
-    <View style={{ flex: 1 }}> 
-      <TouchableOpacity 
-        style={[styles.docBox, error ? { borderColor: AmbColors.error, borderWidth: 1.5, borderStyle: 'solid' } : null]} 
+    <View style={{ flex: 1 }}>
+      <TouchableOpacity
+        style={[
+          styles.docBox,
+          error
+            ? {
+                borderColor: AmbColors.error,
+                borderWidth: 1.5,
+                borderStyle: "solid",
+              }
+            : null,
+        ]}
         onPress={onPress}
       >
         {file ? (
           isPdf ? (
             <View style={styles.pdfBadge}>
-              <MaterialIcons name="picture-as-pdf" size={24} color={AmbColors.primary} />
+              <MaterialIcons
+                name="picture-as-pdf"
+                size={24}
+                color={AmbColors.primary}
+              />
               <Text style={styles.pdfText}>PDF</Text>
             </View>
           ) : (
             <Image source={{ uri: file }} style={styles.docPreview} />
           )
         ) : (
-          <MaterialIcons name="cloud-upload" size={24} color={`${AmbColors.primary}40`} />
+          <MaterialIcons
+            name="cloud-upload"
+            size={24}
+            color={`${AmbColors.primary}40`}
+          />
         )}
-        <Text style={styles.docLabel} numberOfLines={1}>{label}</Text>
-        {file && <View style={styles.checkBadge}><MaterialIcons name="check" size={10} color="#fff" /></View>}
+        <Text style={styles.docLabel} numberOfLines={1}>
+          {label}
+        </Text>
+        {file && (
+          <View style={styles.checkBadge}>
+            <MaterialIcons name="check" size={10} color="#fff" />
+          </View>
+        )}
       </TouchableOpacity>
-      
+
       {/* ADD THIS LINE TO SHOW THE ACTUAL ERROR MESSAGE */}
-      {error ? <Text style={[styles.errorText, { textAlign: 'center' }]}>{error}</Text> : null}
+      {error ? (
+        <Text style={[styles.errorText, { textAlign: "center" }]}>{error}</Text>
+      ) : null}
     </View>
   );
 };
@@ -1094,150 +1255,212 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: AmbColors.surface },
   scroll: { paddingHorizontal: 20, paddingTop: 16 },
   successBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: "#DCFCE7", padding: 14, borderRadius: AmbRadius.md, marginBottom: 20,
-    borderWidth: 1, borderColor: "#22C55E"
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#DCFCE7",
+    padding: 14,
+    borderRadius: AmbRadius.md,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#22C55E",
   },
   successText: { color: "#166534", fontWeight: "600", fontSize: 14 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14, marginTop: 24 },
-  sectionNumberBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: AmbColors.primary, justifyContent: 'center', alignItems: 'center' },
-  sectionNumberText: { fontSize: 13, color: '#fff', fontWeight: '800' },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 14,
+    marginTop: 24,
+  },
+  sectionNumberBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: AmbColors.primary,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  sectionNumberText: { fontSize: 13, color: "#fff", fontWeight: "800" },
   // sectionTitle: { fontSize: 17, fontWeight: '400', color: AmbColors.onSurface, letterSpacing: -0.3 },
-  formCard: { 
-    backgroundColor: AmbColors.surfaceContainerLowest, 
-    borderRadius: AmbRadius.xl, 
-    padding: 18, 
-    elevation: 3, 
-    shadowColor: '#64748B', 
-    shadowOffset: { width: 0, height: 4 }, 
-    shadowOpacity: 0.1, 
-    shadowRadius: 12 
+  formCard: {
+    backgroundColor: AmbColors.surfaceContainerLowest,
+    borderRadius: AmbRadius.xl,
+    padding: 18,
+    elevation: 3,
+    shadowColor: "#64748B",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
   },
   // fieldGroup: { marginBottom: 20 },
-  fieldLabel: { fontSize: 12, fontWeight: '300', color: AmbColors.secondary, marginBottom: 8, letterSpacing: 0.6 },
-  helperText: { fontSize: 11, color: AmbColors.secondary, marginBottom: 16, marginTop: -8 },
-  inputRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: '#F1F5F9', // Slightly darker surface for depth
-    borderRadius: AmbRadius.md, 
-    borderWidth: 1, 
-    borderColor: AmbColors.outline 
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: "300",
+    color: AmbColors.secondary,
+    marginBottom: 8,
+    letterSpacing: 0.6,
   },
-  inputIconBox: { width: 44, alignItems: 'center', justifyContent: 'center' },
-  textInput: { flex: 1, paddingVertical: 12, fontSize: 15, color: AmbColors.onSurface, fontWeight: '500' },
-  typeRow: { flexDirection: 'row', gap: 12 },
-  typeOption: { 
-    flex: 1, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    gap: 8, 
-    paddingVertical: 14, 
-    borderRadius: AmbRadius.md, 
-    borderWidth: 1.5, 
+  helperText: {
+    fontSize: 11,
+    color: AmbColors.secondary,
+    marginBottom: 16,
+    marginTop: -8,
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F1F5F9", // Slightly darker surface for depth
+    borderRadius: AmbRadius.md,
+    borderWidth: 1,
+    borderColor: AmbColors.outline,
+  },
+  inputIconBox: { width: 44, alignItems: "center", justifyContent: "center" },
+  textInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: AmbColors.onSurface,
+    fontWeight: "500",
+  },
+  typeRow: { flexDirection: "row", gap: 12 },
+  typeOption: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: AmbRadius.md,
+    borderWidth: 1.5,
     borderColor: AmbColors.primary,
-    backgroundColor: '#fff'
+    backgroundColor: "#fff",
   },
-  typeOptionActive: { backgroundColor: AmbColors.primary, borderColor: AmbColors.primary },
-  typeText: { fontWeight: '700', color: AmbColors.primary, fontSize: 14 },
-  typeTextActive: { color: '#fff' },
-  docGrid: { flexDirection: 'row', gap: 16 },
-  // docBox: { 
-  //   flex: 1, 
-  //   height: 110, 
-  //   backgroundColor: '#F8FAFC', 
-  //   borderRadius: AmbRadius.md, 
-  //   borderStyle: 'dashed', 
-  //   borderWidth: 1.5, 
-  //   borderColor: AmbColors.outline, 
-  //   justifyContent: 'center', 
-  //   alignItems: 'center', 
-  //   padding: 10 
+  typeOptionActive: {
+    backgroundColor: AmbColors.primary,
+    borderColor: AmbColors.primary,
+  },
+  typeText: { fontWeight: "700", color: AmbColors.primary, fontSize: 14 },
+  typeTextActive: { color: "#fff" },
+  docGrid: { flexDirection: "row", gap: 16 },
+  // docBox: {
+  //   flex: 1,
+  //   height: 110,
+  //   backgroundColor: '#F8FAFC',
+  //   borderRadius: AmbRadius.md,
+  //   borderStyle: 'dashed',
+  //   borderWidth: 1.5,
+  //   borderColor: AmbColors.outline,
+  //   justifyContent: 'center',
+  //   alignItems: 'center',
+  //   padding: 10
   // },
   // docPreview: { width: '100%', height: 65, borderRadius: 6, marginBottom: 6 },
-  docLabel: { fontSize: 11, fontWeight: '600', color: AmbColors.secondary },
-  pdfBadge: { alignItems: 'center', marginBottom: 6 },
-  pdfText: { fontSize: 11, fontWeight: '800', color: AmbColors.primary },
-  checkBadge: { position: 'absolute', top: 6, right: 6, backgroundColor: AmbColors.tertiary, borderRadius: 12, padding: 3 },
-  dateRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    gap: 12, 
-    backgroundColor: '#F1F5F9', 
-    padding: 14, 
-    borderRadius: AmbRadius.md, 
-    borderWidth: 1, 
-    borderColor: AmbColors.outline 
+  docLabel: { fontSize: 11, fontWeight: "600", color: AmbColors.secondary },
+  pdfBadge: { alignItems: "center", marginBottom: 6 },
+  pdfText: { fontSize: 11, fontWeight: "800", color: AmbColors.primary },
+  checkBadge: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    backgroundColor: AmbColors.tertiary,
+    borderRadius: 12,
+    padding: 3,
   },
-  dateText: { flex: 1, fontSize: 15, color: AmbColors.onSurface, fontWeight: '500' },
-  footer: { 
-    position: 'absolute', 
-    bottom: 0, 
-    width: '100%', 
-    padding: 20, 
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-    backgroundColor: '#fff', 
-    borderTopWidth: 1, 
-    borderTopColor: '#E2E8F0',
+  dateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "#F1F5F9",
+    padding: 14,
+    borderRadius: AmbRadius.md,
+    borderWidth: 1,
+    borderColor: AmbColors.outline,
+  },
+  dateText: {
+    flex: 1,
+    fontSize: 15,
+    color: AmbColors.onSurface,
+    fontWeight: "500",
+  },
+  footer: {
+    position: "absolute",
+    bottom: 0,
+    width: "100%",
+    padding: 20,
+    paddingBottom: Platform.OS === "ios" ? 34 : 20,
+    backgroundColor: "#fff",
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
     elevation: 10,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.05,
-    shadowRadius: 8
+    shadowRadius: 8,
   },
-  submitBtn: { 
-    backgroundColor: AmbColors.primary, 
-    flexDirection: 'row', 
-    height: 58, 
-    borderRadius: AmbRadius.md, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    gap: 12 
+  submitBtn: {
+    backgroundColor: AmbColors.primary,
+    flexDirection: "row",
+    height: 58,
+    borderRadius: AmbRadius.md,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 12,
   },
-  submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '400' },
-  errorText: { color: AmbColors.error, fontSize: 11, marginTop: 6, marginLeft: 2, fontWeight: '500' },
-  sectionTitle: { fontSize: 16, fontWeight: '400', color: AmbColors.onSurface, letterSpacing: -0.3 },
-  
+  submitBtnText: { color: "#fff", fontSize: 16, fontWeight: "400" },
+  errorText: {
+    color: AmbColors.error,
+    fontSize: 11,
+    marginTop: 6,
+    marginLeft: 2,
+    fontWeight: "500",
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "400",
+    color: AmbColors.onSurface,
+    letterSpacing: -0.3,
+  },
+
   // Stack for documents
-  fullWidthDocStack: { 
-    gap: 16 // Consistent gap between full-width documents
+  fullWidthDocStack: {
+    gap: 16, // Consistent gap between full-width documents
   },
-  
-  docBox: { 
-    width: '100%', // Explicitly take full width
+
+  docBox: {
+    width: "100%", // Explicitly take full width
     height: 120, // Slightly taller for better visibility
-    backgroundColor: '#F8FAFC', 
-    borderRadius: AmbRadius.md, 
-    borderStyle: 'dashed', 
-    borderWidth: 1.5, 
-    borderColor: AmbColors.outline, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    padding: 12 
+    backgroundColor: "#F8FAFC",
+    borderRadius: AmbRadius.md,
+    borderStyle: "dashed",
+    borderWidth: 1.5,
+    borderColor: AmbColors.outline,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 12,
   },
-  
-  docPreview: { 
-    width: '60%', // Preview doesn't need to be huge, keeping it centered
-    height: 70, 
-    borderRadius: 6, 
-    marginBottom: 8 
+
+  docPreview: {
+    width: "60%", // Preview doesn't need to be huge, keeping it centered
+    height: 70,
+    borderRadius: 6,
+    marginBottom: 8,
   },
-  
+
   // Adjust spacing for CustomInput when stacked
-  fieldGroup: { 
+  fieldGroup: {
     marginBottom: 16,
-    width: '100%' 
+    width: "100%",
   },
- stickyHeader: {
+  stickyHeader: {
     height: 60,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: "#E2E8F0",
     elevation: 4, // Higher elevation for Fabric
     zIndex: 1000, // Ensure it sits on top
   },
@@ -1245,15 +1468,13 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F1F5F9',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#F1F5F9",
   },
   headerTitle: {
     fontSize: 16,
-    fontWeight: '400',
+    fontWeight: "400",
     color: AmbColors.onSurface,
   },
-  
- 
 });

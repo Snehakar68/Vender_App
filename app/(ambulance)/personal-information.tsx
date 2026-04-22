@@ -12,11 +12,15 @@ import {
   ActivityIndicator,
   Alert,
   Switch,
+  Modal,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
+import * as Sharing from "expo-sharing";
 import * as FileSystem from 'expo-file-system';
 import DateTimePicker from "@react-native-community/datetimepicker";
 import {
@@ -75,6 +79,37 @@ async function base64ToTempUri(base64: string, filename: string): Promise<string
   return uri;
 }
 
+function InputField({
+  label, field, placeholder, keyboardType, maxLength, autoCapitalize, required,
+  isEditing, value, onChangeText, error,
+}: {
+  label: string; field: string; placeholder?: string;
+  keyboardType?: any; maxLength?: number; autoCapitalize?: any; required?: boolean;
+  isEditing: boolean; value: string; onChangeText: (v: string) => void; error?: string;
+}) {
+  return (
+    <View style={styles.fieldGroup}>
+      <Text style={styles.fieldLabel}>
+        {label}{required && <Text style={styles.required}> *</Text>}
+      </Text>
+      <View style={[styles.inputWrapper, !isEditing && styles.inputDisabled]}>
+        <TextInput
+          style={styles.textInput}
+          placeholder={placeholder || label}
+          placeholderTextColor={`${AmbColors.outline}70`}
+          value={value}
+          onChangeText={onChangeText}
+          editable={isEditing}
+          keyboardType={keyboardType || "default"}
+          maxLength={maxLength}
+          autoCapitalize={autoCapitalize || "sentences"}
+        />
+      </View>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+    </View>
+  );
+}
+
 export default function PersonalInformationScreen() {
   const auth = useContext(AuthContext);
   const vendorId = auth?.user?.vendorId ?? "";
@@ -87,9 +122,14 @@ export default function PersonalInformationScreen() {
   const [panUri, setPanUri] = useState<string | null>(null);
   const [panBase64, setPanBase64] = useState<string | null>(null);
   const [panIsPdf, setPanIsPdf] = useState(false);
+  const [panMimeType, setPanMimeType] = useState<string | null>(null);
+  const [panName, setPanName] = useState<string | null>(null);
   const [adhaarUri, setAdhaarUri] = useState<string | null>(null);
   const [adhaarBase64, setAdhaarBase64] = useState<string | null>(null);
   const [adhaarIsPdf, setAdhaarIsPdf] = useState(false);
+  const [adhaarMimeType, setAdhaarMimeType] = useState<string | null>(null);
+  const [adhaarName, setAdhaarName] = useState<string | null>(null);
+  const [viewingImageUri, setViewingImageUri] = useState<string | null>(null);
 
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -250,28 +290,58 @@ export default function PersonalInformationScreen() {
   };
 
   const pickPanDoc = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsEditing: false,
-      quality: 0.8,
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ["image/*", "application/pdf"],
+      copyToCacheDirectory: true,
     });
-    if (!result.canceled) {
-      setPanUri(result.assets[0].uri);
-      setPanBase64(null);
-      setPanIsPdf(false);
+    if (result.canceled) return;
+    const file = result.assets[0];
+    if (file.size && file.size > 204800) {
+      setErrors(prev => ({ ...prev, pan: "File must be under 200KB" }));
+      return;
     }
+    const isPdf = file.mimeType === "application/pdf";
+    setPanUri(file.uri);
+    setPanBase64(null);
+    setPanIsPdf(isPdf);
+    setPanMimeType(file.mimeType ?? "image/jpeg");
+    setPanName(file.name);
   };
 
   const pickAdhaarDoc = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsEditing: false,
-      quality: 0.8,
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ["image/*", "application/pdf"],
+      copyToCacheDirectory: true,
     });
-    if (!result.canceled) {
-      setAdhaarUri(result.assets[0].uri);
-      setAdhaarBase64(null);
-      setAdhaarIsPdf(false);
+    if (result.canceled) return;
+    const file = result.assets[0];
+    if (file.size && file.size > 204800) {
+      setErrors(prev => ({ ...prev, adhaar: "File must be under 200KB" }));
+      return;
+    }
+    const isPdf = file.mimeType === "application/pdf";
+    setAdhaarUri(file.uri);
+    setAdhaarBase64(null);
+    setAdhaarIsPdf(isPdf);
+    setAdhaarMimeType(file.mimeType ?? "image/jpeg");
+    setAdhaarName(file.name);
+  };
+
+  const viewAdhaarDoc = async () => {
+    if (adhaarUri) {
+      if (adhaarIsPdf) { await Sharing.shareAsync(adhaarUri, { mimeType: "application/pdf" }); }
+      else { setViewingImageUri(adhaarUri); }
+    } else if (adhaarBase64) {
+      setViewingImageUri(`data:image/jpeg;base64,${adhaarBase64}`);
+    }
+  };
+
+  const viewPanDoc = async () => {
+    if (panUri) {
+      if (panIsPdf) { await Sharing.shareAsync(panUri, { mimeType: "application/pdf" }); }
+      else { setViewingImageUri(panUri); }
+    } else if (panBase64) {
+      setViewingImageUri(`data:image/jpeg;base64,${panBase64}`);
     }
   };
 
@@ -361,12 +431,14 @@ if (photoUri) {
 
 // Aadhaar doc
 if (adhaarUri) {
-  fd.append("adhaar", { uri: adhaarUri, name: "adhaar.jpg", type: "image/jpeg" } as any);
+  const adhaarExt = adhaarMimeType === "application/pdf" ? "pdf" : "jpg";
+  fd.append("adhaar", { uri: adhaarUri, name: adhaarName ?? `adhaar.${adhaarExt}`, type: adhaarMimeType ?? "image/jpeg" } as any);
 }
 
 // PAN doc
 if (panUri) {
-  fd.append("pan", { uri: panUri, name: "pan.jpg", type: "image/jpeg" } as any);
+  const panExt = panMimeType === "application/pdf" ? "pdf" : "jpg";
+  fd.append("pan", { uri: panUri, name: panName ?? `pan.${panExt}`, type: panMimeType ?? "image/jpeg" } as any);
 }
 
       const res = await fetch(
@@ -398,33 +470,6 @@ if (panUri) {
   const initials = form.name.trim()
     ? form.name.trim().split(" ").filter(Boolean).map((w) => w[0]).join("").toUpperCase().slice(0, 2)
     : "PI";
-
-  const InputField = ({
-    label, field, placeholder, keyboardType, maxLength, autoCapitalize, required,
-  }: {
-    label: string; field: keyof typeof DEFAULT_FORM; placeholder?: string;
-    keyboardType?: any; maxLength?: number; autoCapitalize?: any; required?: boolean;
-  }) => (
-    <View style={styles.fieldGroup}>
-      <Text style={styles.fieldLabel}>
-        {label}{required && <Text style={styles.required}> *</Text>}
-      </Text>
-      <View style={[styles.inputWrapper, !isEditing && styles.inputDisabled]}>
-        <TextInput
-          style={styles.textInput}
-          placeholder={placeholder || label}
-          placeholderTextColor={`${AmbColors.outline}70`}
-          value={form[field]}
-          onChangeText={(v) => setField(field, v)}
-          editable={isEditing}
-          keyboardType={keyboardType || "default"}
-          maxLength={maxLength}
-          autoCapitalize={autoCapitalize || "sentences"}
-        />
-      </View>
-      {errors[field] ? <Text style={styles.errorText}>{errors[field]}</Text> : null}
-    </View>
-  );
 
   if (loading) {
     return (
@@ -503,7 +548,7 @@ if (panUri) {
               <MaterialIcons name="person" size={16} color={AmbColors.primary} />
               <Text style={styles.sectionTitle}>Basic Details</Text>
             </View>
-            <InputField label="Full Name" field="name" placeholder="Alex Thompson" required />
+            <InputField label="Full Name" field="name" placeholder="Alex Thompson" required isEditing={isEditing} value={form.name} onChangeText={(v) => setField("name", v)} error={errors.name} />
 
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>GENDER <Text style={styles.required}>*</Text></Text>
@@ -578,9 +623,9 @@ if (panUri) {
               <MaterialIcons name="contact-phone" size={16} color={AmbColors.primary} />
               <Text style={styles.sectionTitle}>Contact Information</Text>
             </View>
-            <InputField label="Email Address" field="email" placeholder="alex@example.com" keyboardType="email-address" autoCapitalize="none" required />
-            <InputField label="Phone Number" field="phone" placeholder="+91 88765 43210" keyboardType="phone-pad" maxLength={10} required />
-            <InputField label="Alt Phone Number" field="altPhone" placeholder="+91 88765 43211" keyboardType="phone-pad" maxLength={10} />
+            <InputField label="Email Address" field="email" placeholder="alex@example.com" keyboardType="email-address" autoCapitalize="none" required isEditing={isEditing} value={form.email} onChangeText={(v) => setField("email", v)} error={errors.email} />
+            <InputField label="Phone Number" field="phone" placeholder="+91 88765 43210" keyboardType="phone-pad" maxLength={10} required isEditing={isEditing} value={form.phone} onChangeText={(v) => setField("phone", v)} error={errors.phone} />
+            <InputField label="Alt Phone Number" field="altPhone" placeholder="+91 88765 43211" keyboardType="phone-pad" maxLength={10} isEditing={isEditing} value={form.altPhone} onChangeText={(v) => setField("altPhone", v)} error={errors.altPhone} />
           </View>
 
           {/* ── Residential Address ── */}
@@ -589,8 +634,8 @@ if (panUri) {
               <MaterialIcons name="location-on" size={16} color={AmbColors.primary} />
               <Text style={styles.sectionTitle}>Residential Address</Text>
             </View>
-            <InputField label="Address Line 1" field="addr1" placeholder="42, Emerald Heights Residency" required />
-            <InputField label="Address Line 2" field="addr2" placeholder="Near Central Park, Sector 15" />
+            <InputField label="Address Line 1" field="addr1" placeholder="42, Emerald Heights Residency" required isEditing={isEditing} value={form.addr1} onChangeText={(v) => setField("addr1", v)} error={errors.addr1} />
+            <InputField label="Address Line 2" field="addr2" placeholder="Near Central Park, Sector 15" isEditing={isEditing} value={form.addr2} onChangeText={(v) => setField("addr2", v)} error={errors.addr2} />
 
             <View style={{ zIndex: 9999 }}>
               <View style={fieldStyles.labelRow}>
@@ -698,7 +743,7 @@ if (panUri) {
               {errors.adhaarNo ? <Text style={styles.errorText}>{errors.adhaarNo}</Text> : null}
             </View>
 
-            <DocUploadBox label="Aadhaar Document" uri={adhaarUri} base64={adhaarBase64} isPdf={adhaarIsPdf} isEditing={isEditing} onPick={pickAdhaarDoc} />
+            <DocUploadBox label="Aadhaar Document" uri={adhaarUri} base64={adhaarBase64} isPdf={adhaarIsPdf} isEditing={isEditing} onPick={pickAdhaarDoc} onView={viewAdhaarDoc} />
 
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>PAN NUMBER <Text style={styles.required}>*</Text></Text>
@@ -717,7 +762,7 @@ if (panUri) {
               {errors.panNo ? <Text style={styles.errorText}>{errors.panNo}</Text> : null}
             </View>
 
-            <DocUploadBox label="PAN Document" uri={panUri} base64={panBase64} isPdf={panIsPdf} isEditing={isEditing} onPick={pickPanDoc} />
+            <DocUploadBox label="PAN Document" uri={panUri} base64={panBase64} isPdf={panIsPdf} isEditing={isEditing} onPick={pickPanDoc} onView={viewPanDoc} />
           </View>
 
           <View style={{ height: 100 }} />
@@ -741,6 +786,26 @@ if (panUri) {
           </TouchableOpacity>
         </View>
       )}
+
+      <Modal
+        visible={!!viewingImageUri}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewingImageUri(null)}
+      >
+        <View style={styles.imageViewerOverlay}>
+          <TouchableOpacity style={styles.imageViewerClose} onPress={() => setViewingImageUri(null)}>
+            <MaterialIcons name="close" size={28} color="#fff" />
+          </TouchableOpacity>
+          {viewingImageUri && (
+            <Image
+              source={{ uri: viewingImageUri }}
+              style={styles.imageViewerImg}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -748,20 +813,25 @@ if (panUri) {
 // ─── Doc Upload Box ───────────────────────────────────────────────────────────
 
 function DocUploadBox({
-  label, uri, base64, isPdf, isEditing, onPick,
+  label, uri, base64, isPdf, isEditing, onPick, onView,
 }: {
   label: string; uri: string | null; base64: string | null;
-  isPdf: boolean; isEditing: boolean; onPick: () => void;
+  isPdf: boolean; isEditing: boolean; onPick: () => void; onView?: () => void;
 }) {
   const hasDoc = !!(uri || base64 || isPdf);
   const imageSource = uri ? { uri } : base64 ? { uri: `data:image/jpeg;base64,${base64}` } : null;
 
+  const handlePress = () => {
+    if (hasDoc && !isEditing && onView) { onView(); }
+    else if (isEditing) { onPick(); }
+  };
+
   return (
     <TouchableOpacity
       style={[styles.docBox, hasDoc && styles.docBoxDone]}
-      onPress={isEditing ? onPick : undefined}
-      activeOpacity={isEditing ? 0.8 : 1}
-      disabled={!isEditing}
+      onPress={handlePress}
+      activeOpacity={(isEditing || (hasDoc && onView)) ? 0.8 : 1}
+      disabled={!isEditing && !(hasDoc && onView)}
     >
       {hasDoc ? (
         imageSource ? (
@@ -928,4 +998,8 @@ const styles = StyleSheet.create({
   submitBtn: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 10, height: 54, backgroundColor: AmbColors.primary, borderRadius: AmbRadius.md, ...AmbShadow.card },
   submitBtnDisabled: { opacity: 0.6 },
   submitBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 16, color: "#ffffff" },
+
+  imageViewerOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.92)", justifyContent: "center", alignItems: "center" },
+  imageViewerClose: { position: "absolute", top: 48, right: 20, zIndex: 10, padding: 8 },
+  imageViewerImg: { width: Dimensions.get("window").width, height: Dimensions.get("window").height * 0.75 },
 });
