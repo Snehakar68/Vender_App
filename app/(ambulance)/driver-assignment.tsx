@@ -173,7 +173,7 @@ function AssignPanel({
           {/* Driver list */}
           <ScrollView style={bs.driverList} showsVerticalScrollIndicator={false}>
             {filtered.map((d) => {
-              const isAssigned = !!d.is_assigned; // use API flag
+              const isAssigned = !!(d.assign_Ambulance?.ambulance_No); // Check actual vehicle assignment
               const isSelected = selectedDriver?.driver_id === d.driver_id;
               return (
                 <TouchableOpacity
@@ -204,7 +204,12 @@ function AssignPanel({
                     <Text style={bs.driverLicense}>DL: {d.license_number ?? "—"}</Text>
                   </View>
                   {isAssigned ? (
-                    <Badge label="Assigned" variant="assigned" />
+                    <View style={bs.assignedToWrap}>
+                      <Text style={bs.assignedToLabel}>Assigned to</Text>
+                      <Text style={bs.assignedToVehicle}>
+                        {d.assign_Ambulance?.ambulance_No ?? "—"}
+                      </Text>
+                    </View>
                   ) : (
                     <Badge label="Available" variant="available" />
                   )}
@@ -304,10 +309,26 @@ const auth = useContext(AuthContext);
   }, [vendorId]);
 
   const fetchHistory = useCallback(async (ambulanceId) => {
+    // Guard: don't fetch if ambulanceId is invalid
+    if (!ambulanceId) {
+      setHistory([]);
+      return;
+    }
+    
     setHistoryLoading(true);
     try {
       const res = await fetch(`${API_BASE}/Get_AssignmentHistory/${ambulanceId}`);
-      const data = await res.json();
+      if (!res.ok) {
+        console.warn(`History fetch failed with status ${res.status}`);
+        setHistory([]);
+        return;
+      }
+      const text = await res.text();
+      if (!text) {
+        setHistory([]);
+        return;
+      }
+      const data = JSON.parse(text);
       setHistory(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("History fetch error:", err);
@@ -319,6 +340,10 @@ const auth = useContext(AuthContext);
 
   const handleSelectAmbulance = useCallback(
     (amb) => {
+      if (!amb?.ambulance_id) {
+        console.error("Invalid ambulance selected");
+        return;
+      }
       setSelectedAmbulance(amb);
       setHistory([]);
       fetchHistory(amb.ambulance_id);
@@ -746,14 +771,15 @@ const bs = StyleSheet.create({
 
   panelActions: {
     flexDirection: "row",
-    gap: 12,
-    marginTop: 14,
-    marginBottom: 4,
+    gap: 14,
+    marginTop: 16,
+    marginBottom: 8,
+    paddingHorizontal: 4,
   },
   cancelBtn: {
     flex: 1,
-    height: 46,
-    borderRadius: 10,
+    height: 50,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: C.border,
     backgroundColor: C.white,
@@ -763,8 +789,8 @@ const bs = StyleSheet.create({
   cancelBtnText: { fontSize: 14, fontWeight: "600", color: "#374151" },
   assignBtn: {
     flex: 1,
-    height: 46,
-    borderRadius: 10,
+    height: 50,
+    borderRadius: 12,
     backgroundColor: C.primary,
     justifyContent: "center",
     alignItems: "center",
@@ -806,4 +832,8 @@ const bs = StyleSheet.create({
   historyCardLeft: { flex: 1 },
   historyDriverName: { fontSize: 13, fontWeight: "600", color: C.text },
   historyDates:      { fontSize: 11, color: C.textMuted, marginTop: 2 },
+
+  assignedToWrap: { alignItems: "flex-end" },
+  assignedToLabel: { fontSize: 10, color: C.danger, fontWeight: "500" },
+  assignedToVehicle: { fontSize: 11, fontWeight: "700", color: C.danger, marginTop: 1 },
 });

@@ -11,7 +11,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { router } from 'expo-router';
 import { AmbColors, AmbRadius, AmbShadow } from '@/src/features/ambulance/constants/ambulanceTheme';
-import AmbulanceTopBar from '@/src/features/ambulance/components/AmbulanceTopBar';
 import { AuthContext } from "@/src/core/context/AuthContext";
 const STATS = [
   { value: '128', label: 'TRIPS', color: AmbColors.primary },
@@ -84,7 +83,6 @@ export default function ProfileScreen() {
   };
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <AmbulanceTopBar showNotification avatarInitials="AS" />
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
@@ -156,12 +154,12 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: AmbColors.surface },
-  scroll: { paddingBottom: 24 },
+  scroll: { paddingBottom: 36 },
 
   // Hero
   heroSection: {
     alignItems: 'center',
-    paddingTop: 8,
+    paddingTop: 10,
     paddingBottom: 24,
     paddingHorizontal: 24,
   },
@@ -178,12 +176,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 4,
     borderColor: AmbColors.surfaceContainerLow,
+    marginBottom: 10,
     ...AmbShadow.elevated,
   },
   avatarInitials: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 36,
     color: AmbColors.primary,
+    lineHeight: 42,
   },
   editBtn: {
     position: 'absolute',
@@ -203,6 +203,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: AmbColors.onSurface,
     marginBottom: 4,
+    lineHeight: 28,
   },
   profileRole: {
     fontFamily: 'Inter_500Medium',
@@ -210,25 +211,33 @@ const styles = StyleSheet.create({
     color: AmbColors.secondary,
     letterSpacing: 0.3,
     marginBottom: 20,
+    lineHeight: 18,
   },
 
   // Stats
   statsRow: {
     flexDirection: 'row',
-    gap: 12,
+    justifyContent: 'space-between',
+    alignItems: 'stretch',
+    gap: 11,
     width: '100%',
   },
   statCard: {
     flex: 1,
     backgroundColor: AmbColors.surfaceContainerLow,
-    padding: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
     borderRadius: AmbRadius.lg,
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
+    minHeight: 84,
+    gap: 5,
   },
   statValue: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 18,
+    lineHeight: 24,
+    textAlign: 'center',
   },
   statLabel: {
     fontFamily: 'Inter_600SemiBold',
@@ -236,17 +245,22 @@ const styles = StyleSheet.create({
     color: AmbColors.secondary,
     letterSpacing: 1,
     textTransform: 'uppercase',
+    marginTop: 2,
+    textAlign: 'center',
   },
 
   // Nav hub
-  navList: { paddingHorizontal: 20, gap: 12 },
+  navList: { paddingHorizontal: 20, gap: 10, marginBottom: 14 },
   navItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 18,
+    justifyContent: 'space-between',
+    minHeight: 60,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     backgroundColor: AmbColors.surfaceContainerLowest,
     borderRadius: AmbRadius.xxl,
-    gap: 14,
+    gap: 12,
   },
   navIconBox: {
     width: 48,
@@ -256,26 +270,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexShrink: 0,
   },
-  navTextBlock: { flex: 1 },
+  navTextBlock: { flex: 1, justifyContent: 'center', gap: 1 },
   navLabel: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
     color: AmbColors.onSurface,
-    marginBottom: 2,
+    marginBottom: 0,
+    lineHeight: 20,
   },
   navSub: {
     fontFamily: 'Inter_400Regular',
     fontSize: 11,
     color: AmbColors.secondary,
+    marginTop: 0,
+    lineHeight: 16,
   },
 
   // Logout
-  dangerZone: { alignItems: 'center', marginTop: 40, paddingHorizontal: 24 },
+  dangerZone: { alignItems: 'center', marginTop: 36, marginBottom: 24, paddingHorizontal: 24 },
   logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
-    paddingVertical: 10,
+    minHeight: 48,
+    paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: AmbRadius.pill,
   },
@@ -283,6 +302,8 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
     color: AmbColors.error,
+    lineHeight: 20,
+    textAlign: 'center',
   },
   versionText: {
     fontFamily: 'Inter_500Medium',
@@ -291,5 +312,6 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     textTransform: 'uppercase',
     marginTop: 16,
+    textAlign: 'center',
   },
 });

@@ -43,6 +43,8 @@ export interface BankDetailsFormProps {
   token?: string;
   style?: ViewStyle;
   onSaved?: () => void;
+  isEditingExternal?: boolean;
+  onEditingChange?: (v: boolean) => void;
 }
 
 export default function BankDetailsForm({
@@ -50,12 +52,19 @@ export default function BankDetailsForm({
   token,
   style,
   onSaved,
+  isEditingExternal,
+  onEditingChange,
 }: BankDetailsFormProps) {
   const [form, setForm] = useState<BankFormState>(EMPTY_FORM);
   const [backup, setBackup] = useState<BankFormState>(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditingInternal, setIsEditingInternal] = useState(false);
+  const isEditing = isEditingExternal !== undefined ? isEditingExternal : isEditingInternal;
+  const setIsEditing = (v: boolean) => {
+    if (onEditingChange) onEditingChange(v);
+    else setIsEditingInternal(v);
+  };
   const [showTypeMenu, setShowTypeMenu] = useState(false);
   const [errors, setErrors] = useState<ValidationErrors<BankFormState>>({});
   const [status, setStatus] = useState<{ text: string; ok: boolean } | null>(null);
@@ -111,6 +120,17 @@ export default function BankDetailsForm({
     setIsEditing(false);
   }
 
+  // When parent cancels (isEditingExternal transitions true→false), restore backup
+  const prevEditingRef = React.useRef(isEditingExternal);
+  React.useEffect(() => {
+    if (prevEditingRef.current === true && isEditingExternal === false) {
+      setForm(backup);
+      setErrors({});
+      setShowTypeMenu(false);
+    }
+    prevEditingRef.current = isEditingExternal;
+  }, [isEditingExternal, backup]);
+
   async function handleUpdate() {
     const errs = validateBankDetails(form);
     if (form.accountNumber !== form.confirmAccount) {
@@ -160,34 +180,29 @@ export default function BankDetailsForm({
 
   return (
     <View style={style}>
-      {/* Info card + Edit/Cancel toggle */}
-      <View style={styles.toolbar}>
-        <View style={styles.infoCard}>
-          <View style={styles.infoIconWrap}>
-            <MaterialIcons name="account-balance" size={22} color={Colors.light.onPrimary} />
+      {/* Section header + Edit/Cancel toggle — hidden when parent controls editing */}
+      {isEditingExternal === undefined && (
+        <View style={styles.toolbar}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="account-balance" size={16} color={Colors.light.primary} />
+            <Text style={styles.sectionTitle}>Payout Account</Text>
           </View>
-          <View style={styles.infoText}>
-            <Text style={styles.infoTitle}>Payout Account</Text>
-            <Text style={styles.infoDesc}>
-              Ensure settlement information is accurate for timely reimbursements.
+          <TouchableOpacity
+            style={[styles.editToggleBtn, isEditing && styles.editToggleBtnActive]}
+            onPress={isEditing ? handleCancel : handleEdit}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons
+              name={isEditing ? 'close' : 'edit'}
+              size={14}
+              color={isEditing ? Colors.light.error : Colors.light.primary}
+            />
+            <Text style={[styles.editToggleText, isEditing && styles.editToggleTextCancel]}>
+              {isEditing ? 'Cancel' : 'Edit'}
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={styles.editToggleBtn}
-          onPress={isEditing ? handleCancel : handleEdit}
-          activeOpacity={0.7}
-        >
-          <MaterialIcons
-            name={isEditing ? 'close' : 'edit'}
-            size={16}
-            color={isEditing ? Colors.light.error : Colors.light.primary}
-          />
-          <Text style={[styles.editToggleText, isEditing && styles.editToggleTextCancel]}>
-            {isEditing ? 'Cancel' : 'Edit'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      )}
 
       {/* Status banner */}
       {status && (
@@ -304,10 +319,14 @@ export default function BankDetailsForm({
           disabled={saving}
           activeOpacity={0.85}
         >
-          {saving
-            ? <ActivityIndicator size="small" color="#fff" />
-            : <Text style={styles.updateBtnText}>Update Details →</Text>
-          }
+          {saving ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <MaterialIcons name="check-circle" size={20} color="#fff" />
+              <Text style={styles.updateBtnText}>Save Changes</Text>
+            </>
+          )}
         </TouchableOpacity>
       )}
     </View>
@@ -371,37 +390,37 @@ const styles = StyleSheet.create({
     color: Colors.light.onSurfaceVariant,
   },
   toolbar: {
-    flexDirection: 'row', alignItems: 'flex-start',
-    gap: Spacing.sm, marginBottom: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
   },
-  infoCard: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
-    backgroundColor: Colors.light.surfaceContainerLow,
-    borderRadius: Radius.lg, padding: Spacing.sm, ...Shadow.subtle,
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  infoIconWrap: {
-    width: 40, height: 40, borderRadius: Radius.md,
-    backgroundColor: Colors.light.primary,
-    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-  },
-  infoText: { flex: 1 },
-  infoTitle: {
-    fontFamily: FontFamily.headline, fontSize: FontSize.titleSmall,
-    color: Colors.light.onSurface, marginBottom: 2,
-  },
-  infoDesc: {
-    fontFamily: FontFamily.body, fontSize: FontSize.bodySmall,
-    color: Colors.light.onSurfaceVariant, lineHeight: 17,
+  sectionTitle: {
+    fontFamily: FontFamily.headline,
+    fontSize: FontSize.titleSmall,
+    color: Colors.light.onSurface,
   },
   editToggleBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    height: 34,
+    paddingHorizontal: 12,
     borderRadius: Radius.full,
-    backgroundColor: Colors.light.surfaceContainerLow,
-    alignSelf: 'flex-start', marginTop: 4,
+    backgroundColor: Colors.light.primary + '15',
+  },
+  editToggleBtnActive: {
+    backgroundColor: Colors.light.error + '15',
   },
   editToggleText: {
-    fontFamily: FontFamily.bodyMedium, fontSize: FontSize.bodySmall,
+    fontFamily: FontFamily.bodyMedium,
+    fontSize: FontSize.bodySmall,
     color: Colors.light.primary,
   },
   editToggleTextCancel: { color: Colors.light.error },
@@ -480,9 +499,15 @@ const styles = StyleSheet.create({
     color: Colors.light.outline, letterSpacing: 0.4,
   },
   updateBtn: {
-    backgroundColor: Colors.light.primary, borderRadius: Radius.lg,
-    height: ButtonSize.minHeight, alignItems: 'center', justifyContent: 'center',
-    marginTop: Spacing.xs, ...Shadow.card,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.light.primary,
+    borderRadius: Radius.lg,
+    height: ButtonSize.minHeight,
+    marginTop: Spacing.xs,
+    ...Shadow.card,
   },
   updateBtnDisabled: { opacity: 0.6 },
   updateBtnText: {

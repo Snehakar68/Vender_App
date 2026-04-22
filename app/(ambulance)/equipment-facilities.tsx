@@ -142,9 +142,11 @@ export default function EquipmentFacilitiesScreen() {
             onPress={handleEditToggle}
             activeOpacity={0.8}
           >
-            <Text style={[styles.editBtnText, isEditing && styles.editBtnTextActive]}>
-              {isEditing ? 'Cancel' : 'Edit'}
-            </Text>
+             <MaterialIcons
+              name={isEditing ? 'close' : 'edit'}
+              size={14}
+              color={isEditing ? AmbColors.error : AmbColors.primary}
+            />
           </TouchableOpacity>
         }
       />

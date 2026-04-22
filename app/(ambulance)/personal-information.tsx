@@ -126,7 +126,7 @@ export default function PersonalInformationScreen() {
       }
     }, 400);
     return () => clearTimeout(timer);
-  }, [cityQuery, isEditing]);
+  }, [cityQuery, isEditing, citySelected]);
 
   const fetchPlaceDetails = async (placeId: string) => {
     setCitySelected(true);
@@ -215,18 +215,21 @@ export default function PersonalInformationScreen() {
 
   const handleEditToggle = () => {
     if (isEditing) {
+      // Cancel edit mode
       setForm(backupForm);
+      setCityQuery(backupForm.city); // Reset query to saved value
+      setCitySelected(true); // Mark as not-user-modified to prevent auto-search
       setErrors({});
       setSuccessMsg("");
-      setCitySelected(false);
       setCityResults([]);
       setIsEditing(false);
     } else {
+      // Enter edit mode
+      setCitySelected(true); // SET THIS FIRST - guard prevents auto-search on edit mode enter
       setBackupForm(form);
       setErrors({});
       setSuccessMsg("");
       setCityQuery(backupForm.city);
-      setCitySelected(false);
       setCityResults([]);
       setIsEditing(true);
     }
@@ -446,9 +449,14 @@ if (panUri) {
             onPress={handleEditToggle}
             activeOpacity={0.8}
           >
-            <Text style={[styles.editBtnText, isEditing && styles.editBtnTextActive]}>
+            <MaterialIcons
+              name={isEditing ? 'close' : 'edit'}
+              size={14}
+              color={isEditing ? AmbColors.error : AmbColors.primary}
+            />
+            {/* <Text style={[styles.editBtnText, isEditing && styles.editBtnTextActive]}>
               {isEditing ? "Cancel" : "Edit"}
-            </Text>
+            </Text> */}
           </TouchableOpacity>
         }
       />
@@ -829,7 +837,15 @@ const styles = StyleSheet.create({
   },
   cityDropdownText: { flex: 1, fontFamily: FontFamily.body, fontSize: FontSize.bodySmall, color: Colors.light.onSurface },
 
-  editBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: AmbRadius.pill, backgroundColor: `${AmbColors.primary}15` },
+  editBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    height: 34,
+    paddingHorizontal: 12,
+    borderRadius: AmbRadius.pill,
+    backgroundColor: `${AmbColors.primary}15`,
+  },
   editBtnActive: { backgroundColor: `${AmbColors.error}15` },
   editBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: AmbColors.primary },
   editBtnTextActive: { color: AmbColors.error },
