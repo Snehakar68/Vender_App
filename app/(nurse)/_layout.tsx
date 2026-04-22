@@ -49,6 +49,20 @@ export default function NurseLayout() {
           ),
         }}
       />
+            <Tabs.Screen
+        name="bank"
+        options={{
+          href: null, // 👈 hides from tab bar
+        }}
+      />
+
+         <Tabs.Screen
+        name="personal"
+        options={{
+          href: null, // 👈 hides from tab bar
+        }}
+      />
+
 
     </Tabs>
   );
