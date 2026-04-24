@@ -546,7 +546,7 @@ const auth = useContext(AuthContext);
                         onPress={() => handleSelectAmbulance(amb)}
                         activeOpacity={0.8}
                       >
-                        <Text style={s.assignPillText}>Assign</Text>
+                        <Text style={s.assignPillText} numberOfLines={1}>Assign</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -681,8 +681,9 @@ const s = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 4,
+    flexShrink: 0,
   },
-  assignPillText: { fontSize: 12, fontWeight: "600", color: C.blue },
+  assignPillText: { fontSize: 12, fontWeight: "600", color: C.blue, flexShrink: 0 },
 });
 
 const bs = StyleSheet.create({

@@ -550,13 +550,13 @@ export default function AmbulanceListScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* HEADER */}
-          <View style={styles.header}>
-            <Text style={styles.title}>Ambulance List</Text>
-            <Text style={styles.subtitle}>Manage your ambulances</Text>
-          </View>
+        {/* HEADER */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Ambulance List</Text>
+          <Text style={styles.subtitle}>Manage your ambulances</Text>
+        </View>
 
+        <ScrollView showsVerticalScrollIndicator={false}>
           {/* SEARCH */}
           <TextInput
             placeholder="Search ambulance..."
