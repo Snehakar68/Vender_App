@@ -30,10 +30,12 @@ type Driver = {
   name: string;
   phone?: string;
   licenseNumber: string;
+  licenseExpiry?: string;
+  licenseDocBase64?: string | null;
   assignedAmbulance: string;
   status: "Online" | "Offline";
   initials: string;
-  photoBase64?: string | null; // ✅ added
+  photoBase64?: string | null;
 };
 
 export default function DriversScreen() {
@@ -52,12 +54,16 @@ export default function DriversScreen() {
       .then((res) => res.json())
       .then((data) => {
         const normalized: Driver[] = (data || []).map((r: any) => {
+          
           const name = r.driver_name || "";
+          
           return {
             id: r.driver_id?.toString(),
             name,
             phone: r.mobile,
             licenseNumber: r.license_no,
+            licenseExpiry: (r.license_expiry ?? r.licenseExpiry ?? "").split("T")[0],
+            licenseDocBase64: r.license ?? r.licenseDoc ?? r.license_doc ?? r.licenseDocument ?? r.license_document ?? r.licenseDocBase64 ?? r.license_base64 ?? null,
             assignedAmbulance: r.assign_Ambulance?.ambulance_No || "Not Assigned",
             status: r.isActive ? "Online" : "Offline",
             initials: name
@@ -66,7 +72,6 @@ export default function DriversScreen() {
               .join("")
               .toUpperCase()
               .slice(0, 2),
-            // ✅ photo from API response — adjust field name if different
             photoBase64: r.photo ?? r.driver_photo ?? null,
           };
         });
@@ -188,12 +193,12 @@ export default function DriversScreen() {
               data={driver}
               onView={() =>
                 router.push(
-                  `/(ambulance)/add-driver?mode=view&id=${driver.id}&driverName=${encodeURIComponent(driver.name)}&driverPhone=${encodeURIComponent(driver.phone ?? "")}&driverLicense=${encodeURIComponent(driver.licenseNumber)}&driverPhoto=${encodeURIComponent(driver.photoBase64 ?? "")}&driverAmbulance=${encodeURIComponent(driver.assignedAmbulance)}`
+                  `/(ambulance)/add-driver?mode=view&id=${driver.id}&driverName=${encodeURIComponent(driver.name)}&driverPhone=${encodeURIComponent(driver.phone ?? "")}&driverLicense=${encodeURIComponent(driver.licenseNumber)}&driverLicenseExpiry=${encodeURIComponent(driver.licenseExpiry ?? "")}&driverLicenseDoc=${encodeURIComponent(driver.licenseDocBase64 ?? "")}&driverPhoto=${encodeURIComponent(driver.photoBase64 ?? "")}&driverAmbulance=${encodeURIComponent(driver.assignedAmbulance)}`
                 )
               }
               onEdit={() =>
                 router.push(
-                  `/(ambulance)/add-driver?mode=edit&id=${driver.id}&driverName=${encodeURIComponent(driver.name)}&driverPhone=${encodeURIComponent(driver.phone ?? "")}&driverLicense=${encodeURIComponent(driver.licenseNumber)}&driverPhoto=${encodeURIComponent(driver.photoBase64 ?? "")}&driverAmbulance=${encodeURIComponent(driver.assignedAmbulance)}`
+                  `/(ambulance)/add-driver?mode=edit&id=${driver.id}&driverName=${encodeURIComponent(driver.name)}&driverPhone=${encodeURIComponent(driver.phone ?? "")}&driverLicense=${encodeURIComponent(driver.licenseNumber)}&driverLicenseExpiry=${encodeURIComponent(driver.licenseExpiry ?? "")}&driverLicenseDoc=${encodeURIComponent(driver.licenseDocBase64 ?? "")}&driverPhoto=${encodeURIComponent(driver.photoBase64 ?? "")}&driverAmbulance=${encodeURIComponent(driver.assignedAmbulance)}`
                 )
               }
               onDelete={() => handleDelete(driver.id, driver.name)}

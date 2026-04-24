@@ -11,6 +11,7 @@ import {
   Image,
   ActivityIndicator,
   Alert,
+  Linking,
   Switch,
   Modal,
   Dimensions,
@@ -20,8 +21,8 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
-import * as Sharing from "expo-sharing";
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as ImageManipulator from 'expo-image-manipulator';
 import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   AmbColors,
@@ -230,11 +231,11 @@ export default function PersonalInformationScreen() {
         setCityQuery(mapped.city);
         if (docs.photo) setPhotoBase64(docs.photo);
         if (docs.pan) {
-          if (isPdfB64(docs.pan)) setPanIsPdf(true);
+          if (isPdfB64(docs.pan)) { setPanIsPdf(true); setPanBase64(docs.pan); }
           else setPanBase64(docs.pan);
         }
         if (docs.adhaar) {
-          if (isPdfB64(docs.adhaar)) setAdhaarIsPdf(true);
+          if (isPdfB64(docs.adhaar)) { setAdhaarIsPdf(true); setAdhaarBase64(docs.adhaar); }
           else setAdhaarBase64(docs.adhaar);
         }
       })
@@ -275,18 +276,90 @@ export default function PersonalInformationScreen() {
     }
   };
 
-  // ✅ FIX 2: use plain ["images"] array instead of deprecated MediaTypeOptions.Images
   const pickPhoto = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (!result.canceled) {
-      setPhotoUri(result.assets[0].uri);
-      setPhotoBase64(null);
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission needed", "Gallery permission is required to select a photo");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled) {
+        const uri = result.assets[0].uri;
+        const info = await FileSystem.getInfoAsync(uri);
+        if ((info as any).size > 204800) {
+          Alert.alert("File too large", "Only 200KB size allowed");
+          return;
+        }
+        setPhotoUri(uri);
+        setPhotoBase64(null);
+      }
+    } catch {
+      Alert.alert("Error", "Could not open gallery");
     }
+  };
+
+  const compressPhoto = async (uri: string): Promise<string> => {
+    try {
+      const info = await FileSystem.getInfoAsync(uri);
+      if ((info as any).size <= 204800) return uri;
+      let result = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: 800 } }],
+        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG },
+      );
+      const info2 = await FileSystem.getInfoAsync(result.uri);
+      if ((info2 as any).size <= 204800) return result.uri;
+      result = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: 600 } }],
+        { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG },
+      );
+      return result.uri;
+    } catch {
+      return uri;
+    }
+  };
+
+  const pickPhotoFromCamera = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission needed", "Camera permission is required to take a photo");
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled) {
+        const compressed = await compressPhoto(result.assets[0].uri);
+        const info = await FileSystem.getInfoAsync(compressed);
+        if ((info as any).size > 204800) {
+          Alert.alert("File too large", "Only 200KB size allowed");
+          return;
+        }
+        setPhotoUri(compressed);
+        setPhotoBase64(null);
+      }
+    } catch {
+      Alert.alert("Error", "Could not open camera");
+    }
+  };
+
+  const handlePhotoPress = () => {
+    if (!isEditing) return;
+    Alert.alert("Profile Photo", "Choose source", [
+      { text: "Camera", onPress: pickPhotoFromCamera },
+      { text: "Gallery", onPress: pickPhoto },
+      { text: "Cancel", style: "cancel" },
+    ]);
   };
 
   const pickPanDoc = async () => {
@@ -329,19 +402,63 @@ export default function PersonalInformationScreen() {
 
   const viewAdhaarDoc = async () => {
     if (adhaarUri) {
-      if (adhaarIsPdf) { await Sharing.shareAsync(adhaarUri, { mimeType: "application/pdf" }); }
-      else { setViewingImageUri(adhaarUri); }
+      if (adhaarIsPdf) {
+        try {
+          const uri = Platform.OS === "android"
+            ? await FileSystem.getContentUriAsync(adhaarUri)
+            : adhaarUri;
+          await Linking.openURL(uri);
+        } catch {
+          Alert.alert("Error", "Could not open document");
+        }
+      } else {
+        setViewingImageUri(adhaarUri);
+      }
     } else if (adhaarBase64) {
-      setViewingImageUri(`data:image/jpeg;base64,${adhaarBase64}`);
+      if (adhaarIsPdf) {
+        try {
+          const tmpUri = await base64ToTempUri(adhaarBase64, "adhaar_doc.pdf");
+          const uri = Platform.OS === "android"
+            ? await FileSystem.getContentUriAsync(tmpUri)
+            : tmpUri;
+          await Linking.openURL(uri);
+        } catch {
+          Alert.alert("Error", "Could not open document");
+        }
+      } else {
+        setViewingImageUri(`data:image/jpeg;base64,${adhaarBase64}`);
+      }
     }
   };
 
   const viewPanDoc = async () => {
     if (panUri) {
-      if (panIsPdf) { await Sharing.shareAsync(panUri, { mimeType: "application/pdf" }); }
-      else { setViewingImageUri(panUri); }
+      if (panIsPdf) {
+        try {
+          const uri = Platform.OS === "android"
+            ? await FileSystem.getContentUriAsync(panUri)
+            : panUri;
+          await Linking.openURL(uri);
+        } catch {
+          Alert.alert("Error", "Could not open document");
+        }
+      } else {
+        setViewingImageUri(panUri);
+      }
     } else if (panBase64) {
-      setViewingImageUri(`data:image/jpeg;base64,${panBase64}`);
+      if (panIsPdf) {
+        try {
+          const tmpUri = await base64ToTempUri(panBase64, "pan_doc.pdf");
+          const uri = Platform.OS === "android"
+            ? await FileSystem.getContentUriAsync(tmpUri)
+            : tmpUri;
+          await Linking.openURL(uri);
+        } catch {
+          Alert.alert("Error", "Could not open document");
+        }
+      } else {
+        setViewingImageUri(`data:image/jpeg;base64,${panBase64}`);
+      }
     }
   };
 
@@ -523,7 +640,7 @@ if (panUri) {
           <View style={styles.heroCard}>
             <TouchableOpacity
               style={styles.photoCircle}
-              onPress={isEditing ? pickPhoto : undefined}
+              onPress={isEditing ? handlePhotoPress : undefined}
               activeOpacity={isEditing ? 0.8 : 1}
             >
               {photoSource ? (
@@ -819,7 +936,11 @@ function DocUploadBox({
   isPdf: boolean; isEditing: boolean; onPick: () => void; onView?: () => void;
 }) {
   const hasDoc = !!(uri || base64 || isPdf);
-  const imageSource = uri ? { uri } : base64 ? { uri: `data:image/jpeg;base64,${base64}` } : null;
+  const imageSource = (!isPdf && uri)
+    ? { uri }
+    : (!isPdf && base64)
+      ? { uri: `data:image/jpeg;base64,${base64}` }
+      : null;
 
   const handlePress = () => {
     if (hasDoc && !isEditing && onView) { onView(); }

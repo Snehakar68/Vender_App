@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Linking,
   Image,
   ActivityIndicator,
   Dimensions,
@@ -19,7 +20,8 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
-import * as Sharing from "expo-sharing";
+import * as FileSystem from 'expo-file-system/legacy';
+import * as ImageManipulator from 'expo-image-manipulator';
 import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   AmbColors,
@@ -60,7 +62,7 @@ export default function AddDriverScreen() {
 
   const auth = useContext(AuthContext);
   const vendorId = auth?.user?.vendorId ?? "";
-
+console.log("[AddDriver] Vendor ID:", vendorId);
   // ── Form state ────────────────────────────────────────────────────────────
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -84,31 +86,135 @@ export default function AddDriverScreen() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [viewingImageUri, setViewingImageUri] = useState<string | null>(null);
 
-  // ── Prefill from params (mirrors web initialData) ─────────────────────────
+  // ── Prefill from URL params (text fields + photo) ────────────────────────
   useEffect(() => {
     if ((!isView && !isEdit) || !id) return;
     if (driverName) setName(decodeURIComponent(driverName));
     if (driverPhone) setPhone(decodeURIComponent(driverPhone));
     if (driverLicense) setLicenseNumber(decodeURIComponent(driverLicense));
-    if (driverLicenseExpiry) setLicenseExpiry(decodeURIComponent(driverLicenseExpiry));
+    if (driverLicenseExpiry) setLicenseExpiry(decodeURIComponent(driverLicenseExpiry).split("T")[0]);
     if (driverAmbulance) setAssignedAmbulance(decodeURIComponent(driverAmbulance));
     if (driverPhoto) setPhotoBase64(decodeURIComponent(driverPhoto));
-    if (driverLicenseDoc) setLicenseDocBase64(decodeURIComponent(driverLicenseDoc));
+    if (driverLicenseDoc) {
+      setLicenseDocBase64(decodeURIComponent(driverLicenseDoc));
+      setLicenseDocName("Document uploaded");
+    }
   }, [id, mode]);
+
+  // ── Fetch license doc directly from API (URL params can't carry large base64) ──
+  useEffect(() => {
+    if ((!isView && !isEdit) || !id || !vendorId) return;
+    fetch(`${API_BASE}/Get_DriverList_By_Vendor_id/${vendorId}`)
+      .then(r => r.json())
+      .then((data: any[]) => {
+        const driver = (data || []).find((d: any) => d.driver_id?.toString() === id);
+        console.log("[AddDriver] Fetched driver list from API, looking for ID:", id);
+        if (!driver) return;
+        console.log("[AddDriver] Raw driver from API:", JSON.stringify(driver));
+        const doc =
+          driver.license ?? driver.licenseDoc ?? driver.license_doc ??
+          driver.licenseDocument ?? driver.license_document ??
+          driver.licenseDocBase64 ?? driver.license_base64 ?? null;
+        console.log("[AddDriver] Resolved licenseDoc:", doc ? `[base64 length=${doc.length}]` : null);
+        const expiry = (driver.license_expiry ?? driver.licenseExpiry ?? "").split("T")[0];
+        console.log("[AddDriver] Resolved expiry:", expiry);
+        if (doc) {
+          setLicenseDocBase64(prev => prev ?? doc);
+          setLicenseDocName(prev => prev ?? "Document uploaded");
+        }
+        if (expiry) setLicenseExpiry(prev => prev || expiry);
+
+      })
+      .catch(() => {});
+  }, [id, vendorId, mode]);
 
   // ── Image pickers ─────────────────────────────────────────────────────────
   const pickPhoto = async () => {
     if (isView) return;
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (!result.canceled) {
-      setPhotoUri(result.assets[0].uri);
-      setPhotoBase64(null);
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission needed", "Gallery permission is required to select a photo");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled) {
+        const uri = result.assets[0].uri;
+        const info = await FileSystem.getInfoAsync(uri);
+        if ((info as any).size > 204800) {
+          Alert.alert("File too large", "Only 200KB size allowed");
+          return;
+        }
+        setPhotoUri(uri);
+        setPhotoBase64(null);
+      }
+    } catch {
+      Alert.alert("Error", "Could not open gallery");
     }
+  };
+
+  const compressPhoto = async (uri: string): Promise<string> => {
+    try {
+      const info = await FileSystem.getInfoAsync(uri);
+      if ((info as any).size <= 204800) return uri;
+      let result = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: 800 } }],
+        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG },
+      );
+      const info2 = await FileSystem.getInfoAsync(result.uri);
+      if ((info2 as any).size <= 204800) return result.uri;
+      result = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: 600 } }],
+        { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG },
+      );
+      return result.uri;
+    } catch {
+      return uri;
+    }
+  };
+
+  const pickPhotoFromCamera = async () => {
+    if (isView) return;
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission needed", "Camera permission is required to take a photo");
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled) {
+        const compressed = await compressPhoto(result.assets[0].uri);
+        const info = await FileSystem.getInfoAsync(compressed);
+        if ((info as any).size > 204800) {
+          Alert.alert("File too large", "Only 200KB size allowed");
+          return;
+        }
+        setPhotoUri(compressed);
+        setPhotoBase64(null);
+      }
+    } catch {
+      Alert.alert("Error", "Could not open camera");
+    }
+  };
+
+  const handlePhotoPress = () => {
+    if (isView) return;
+    Alert.alert("Profile Photo", "Choose source", [
+      { text: "Camera", onPress: pickPhotoFromCamera },
+      { text: "Gallery", onPress: pickPhoto },
+      { text: "Cancel", style: "cancel" },
+    ]);
   };
 
   const pickLicenseDoc = async () => {
@@ -132,12 +238,33 @@ export default function AddDriverScreen() {
   const viewLicenseDoc = async () => {
     if (licenseDocUri) {
       if (licenseDocMimeType === "application/pdf") {
-        await Sharing.shareAsync(licenseDocUri, { mimeType: "application/pdf" });
+        try {
+          const uri = Platform.OS === "android"
+            ? await FileSystem.getContentUriAsync(licenseDocUri)
+            : licenseDocUri;
+          await Linking.openURL(uri);
+        } catch {
+          Alert.alert("Error", "Could not open document");
+        }
       } else {
         setViewingImageUri(licenseDocUri);
       }
     } else if (licenseDocBase64) {
-      setViewingImageUri(`data:image/jpeg;base64,${licenseDocBase64}`);
+      const isPdf = licenseDocBase64.startsWith("JVBER");
+      if (isPdf) {
+        try {
+          const tmpUri = (FileSystem.cacheDirectory ?? "") + "license_doc.pdf";
+          await FileSystem.writeAsStringAsync(tmpUri, licenseDocBase64, { encoding: "base64" as any });
+          const uri = Platform.OS === "android"
+            ? await FileSystem.getContentUriAsync(tmpUri)
+            : tmpUri;
+          await Linking.openURL(uri);
+        } catch {
+          Alert.alert("Error", "Could not open document");
+        }
+      } else {
+        setViewingImageUri(`data:image/jpeg;base64,${licenseDocBase64}`);
+      }
     }
   };
 
@@ -177,13 +304,39 @@ export default function AddDriverScreen() {
       if (photoUri) {
         fd.append("photo", { uri: photoUri, name: "photo.jpg", type: "image/jpeg" } as any);
       }
+
       if (licenseDocUri) {
         const ext = licenseDocMimeType === "application/pdf" ? "pdf" : "jpg";
         fd.append("license", { uri: licenseDocUri, name: `license.${ext}`, type: licenseDocMimeType ?? "image/jpeg" } as any);
+      } else if (licenseDocBase64 && isEdit) {
+        // Edit mode: no new file picked — re-send existing base64 doc as a file so backend keeps it
+        const isPdf = licenseDocBase64.startsWith("JVBER");
+        const ext = isPdf ? "pdf" : "jpg";
+        const mime = isPdf ? "application/pdf" : "image/jpeg";
+        const tmpUri = (FileSystem.cacheDirectory ?? "") + `license_resubmit.${ext}`;
+        await FileSystem.writeAsStringAsync(tmpUri, licenseDocBase64, { encoding: "base64" as any });
+        fd.append("license", { uri: tmpUri, name: `license.${ext}`, type: mime } as any);
       }
+
       if (isEdit && id) {
         fd.append("driver_Id", Number(id) as any);
       }
+
+      console.log("[AddDriver] POST payload fields:", {
+        vendor_id: vendorId,
+        driver_name: name.trim(),
+        mobile: phone.trim(),
+        license_no: licenseNumber.trim(),
+        license_expiry: licenseExpiry,
+        hasPhotoFile: !!photoUri,
+        hasLicenseDocUri: !!licenseDocUri,
+        hasLicenseDocBase64_resubmit: !licenseDocUri && !!licenseDocBase64 && isEdit,
+        driver_Id: isEdit ? id : undefined,
+        endpoint: isEdit ? "Update_DriversInfo" : "ADD_DriversInfo",
+       licenseDocUriPreview: licenseDocUri,
+       licenseDocBase64Preview: licenseDocBase64 ? `[base64 length=${licenseDocBase64.length}]` : null,
+       photoUriPreview: photoUri,
+      });
 
       const endpoint = isEdit
         ? `${API_BASE}/Update_DriversInfo`
@@ -191,6 +344,7 @@ export default function AddDriverScreen() {
 
       const res = await fetch(endpoint, { method: "POST", body: fd });
       const data = await res.json();
+      console.log("[AddDriver] POST response:", JSON.stringify(data));
       if (!res.ok) throw new Error(data?.message || "Submission failed");
 
       setShowSuccessModal(true);
@@ -244,7 +398,7 @@ export default function AddDriverScreen() {
             <View style={styles.photoSection}>
               <TouchableOpacity
                 style={styles.photoCircle}
-                onPress={pickPhoto}
+                onPress={handlePhotoPress}
                 activeOpacity={isView ? 1 : 0.7}
                 disabled={isView}
               >
