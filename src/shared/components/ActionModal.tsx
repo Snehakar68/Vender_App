@@ -16,7 +16,7 @@ export interface ActionModalProps {
   confirmText?: string;
   cancelText?: string;
   onConfirm: () => void;
-  onCancel: () => void;
+  onCancel?: () => void;
   iconName?: React.ComponentProps<typeof MaterialIcons>['name'];
   iconColor?: string;
 }
