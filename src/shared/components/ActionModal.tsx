@@ -19,6 +19,7 @@ export interface ActionModalProps {
   onCancel?: () => void;
   iconName?: React.ComponentProps<typeof MaterialIcons>['name'];
   iconColor?: string;
+  buttonColor?: string;
 }
 
 export default function ActionModal({
@@ -31,8 +32,10 @@ export default function ActionModal({
   // onCancel,
   iconName = 'check-circle',
   iconColor,
+  buttonColor,
 }: ActionModalProps) {
   const resolvedIconColor = iconColor ?? AmbColors.primary;
+  const resolvedButtonColor = buttonColor ?? AmbColors.primary;
 
   return (
     <Modal
@@ -57,7 +60,7 @@ export default function ActionModal({
 
           {/* Buttons */}
           <TouchableOpacity
-            style={[styles.btn, styles.btnPrimary]}
+            style={[styles.btn, styles.btnPrimary, { backgroundColor: resolvedButtonColor }]}
             onPress={onConfirm}
             activeOpacity={0.85}
           >

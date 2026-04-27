@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useContext, useRef } from "react";
 import {
   View,
@@ -12,6 +11,7 @@ import {
   ActivityIndicator,
   Modal,
   Image,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -22,7 +22,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AuthContext } from "@/src/core/context/AuthContext";
 import api from "@/src/core/api/apiClient";
 import { GoogleMapApiKey } from "@/src/utils/Apis";
-
+import * as FileSystem from "expo-file-system/legacy";
+import * as ImageManipulator from "expo-image-manipulator";
 export const HOSPITAL_PROFILE_KEY = "@jhilmil/hospital_profile";
 import {
   Colors,
@@ -38,8 +39,10 @@ import {
   ValidationErrors,
   PersonalFormState,
 } from "@/src/shared/utils/validation";
+import ActionModal from "@/src/shared/components/ActionModal";
 
 const MIN_IMAGES = 3;
+const MAX_IMAGE_BYTES = 200 * 1024; // 200 KB
 
 const EMPTY_FORM: PersonalFormState = {
   hospitalName: "",
@@ -63,22 +66,26 @@ export default function PersonalDetailsScreen() {
   const vendorId = auth?.user?.vendorId;
 
   const [form, setForm] = useState<PersonalFormState>(EMPTY_FORM);
-  const [originalForm, setOriginalForm] = useState<PersonalFormState>(EMPTY_FORM);
+  const [originalForm, setOriginalForm] =
+    useState<PersonalFormState>(EMPTY_FORM);
   const [images, setImages] = useState<string[]>([]);
   const [originalImages, setOriginalImages] = useState<string[]>([]);
-  const [viewingImage, setViewingImage] = useState<string | null>(null);
+  const [viewingImageUri, setViewingImageUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [statusMsg, setStatusMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [statusMsg, setStatusMsg] = useState<{
+    text: string;
+    ok: boolean;
+  } | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   // ── City autocomplete state ──────────────────────────────────────────────
   const [cityQuery, setCityQuery] = useState("");
   const [cityResults, setCityResults] = useState<any[]>([]);
   const [citySelected, setCitySelected] = useState(false);
 
-  // Sync cityQuery when form.city changes externally (e.g. on load / cancel)
   useEffect(() => {
     setCityQuery(form.city);
   }, [form.city]);
@@ -91,13 +98,10 @@ export default function PersonalDetailsScreen() {
       setCityResults([]);
       return;
     }
-
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(
-          `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
-            cityQuery
-          )}&types=(cities)&components=country:in&key=${GoogleMapApiKey}`
+          `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(cityQuery)}&types=(cities)&components=country:in&key=${GoogleMapApiKey}`,
         );
         const data = await res.json();
         setCityResults(data.predictions || []);
@@ -105,44 +109,37 @@ export default function PersonalDetailsScreen() {
         console.log("Autocomplete error:", err);
       }
     }, 400);
-
     return () => clearTimeout(timer);
   }, [cityQuery, isEditing]);
 
-  // ── Google Place Details ─────────────────────────────────────────────────
   const fetchPlaceDetails = async (placeId: string) => {
     setCitySelected(true);
     setCityResults([]);
     try {
       const res = await fetch(
-        `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${GoogleMapApiKey}&fields=address_component`
+        `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${GoogleMapApiKey}&fields=address_component`,
       );
       const data = await res.json();
       const details = data.result;
-
-      let city = "";
-      let state = "";
-      let pin = "";
-
+      let city = "",
+        state = "",
+        pin = "";
       details.address_components.forEach((comp: any) => {
         const types = comp.types;
         if (types.includes("locality")) city = comp.long_name;
         if (!city && types.includes("administrative_area_level_2"))
           city = comp.long_name;
-        if (types.includes("administrative_area_level_1")) state = comp.long_name;
+        if (types.includes("administrative_area_level_1"))
+          state = comp.long_name;
         if (types.includes("postal_code")) pin = comp.long_name;
       });
-
       setCityQuery(city);
-
       setForm((prev) => ({
         ...prev,
         city,
         state,
         ...(pin ? { pinCode: pin } : {}),
       }));
-
-      // Clear related errors
       setErrors((prev) => {
         const copy = { ...prev };
         delete copy.city;
@@ -162,9 +159,10 @@ export default function PersonalDetailsScreen() {
 
   const loadProfile = async () => {
     try {
-      const res = await api.get(`/api/Hospital/GetHosPersonnelInfoById/${vendorId}`);
+      const res = await api.get(
+        `/api/Hospital/GetHosPersonnelInfoById/${vendorId}`,
+      );
       const apiData = res.data?.data?.hospital;
-      console.log("Profile data:", res.data);
       const loaded: PersonalFormState = {
         hospitalName: apiData?.full_name ?? "",
         addressLine1: apiData?.adrs_1 ?? "",
@@ -184,19 +182,29 @@ export default function PersonalDetailsScreen() {
       setOriginalForm(loaded);
       setCityQuery(loaded.city);
 
-      const rawPhotos: string[] = Array.isArray(res.data?.data?.photos)
+      const rawPhotos: any[] = Array.isArray(res.data?.data?.photos)
         ? res.data.data.photos
         : [];
+
       const apiImages = rawPhotos
         .filter(Boolean)
-        .map((img) => `data:image/png;base64,${img}`);
+        .map((img: any) => {
+          if (typeof img === "string") {
+            return img.startsWith("data:")
+              ? img
+              : `data:image/jpeg;base64,${img}`;
+          }
+          return null;
+        })
+        .filter(Boolean) as string[];
+
       setImages(apiImages);
       setOriginalImages(apiImages);
 
       const profileImage: string | null = apiImages[0] ?? null;
       await AsyncStorage.setItem(
         HOSPITAL_PROFILE_KEY,
-        JSON.stringify({ hospitalName: loaded.hospitalName, profileImage })
+        JSON.stringify({ hospitalName: loaded.hospitalName, profileImage }),
       );
     } catch (e) {
       console.log("Profile fetch failed:", e);
@@ -239,24 +247,93 @@ export default function PersonalDetailsScreen() {
     setIsEditing(false);
   }
 
-  const pickImage = async (index: number) => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      showStatus("Permission to access gallery is required.", false);
-      return;
+  // ─────────────────────────────────────────────────────────────────────────
+  // ✅ FIX — IMAGE COMPRESSION
+  //
+  // Compress image down to ≤200KB with up to 3 passes.
+  // Returns the compressed URI, or null if it cannot fit under the limit.
+  // ─────────────────────────────────────────────────────────────────────────
+  const compressToLimit = async (uri: string): Promise<string | null> => {
+    try {
+      let current = uri;
+      const widths = [1200, 900, 700, 500];
+      const qualities = [0.8, 0.65, 0.5, 0.35];
+
+      for (let i = 0; i < widths.length; i++) {
+        const info = await FileSystem.getInfoAsync(current);
+        if ((info as any).size <= MAX_IMAGE_BYTES) return current;
+
+        const result = await ImageManipulator.manipulateAsync(
+          uri, // always start from original to avoid quality compounding
+          [{ resize: { width: widths[i] } }],
+          { compress: qualities[i], format: ImageManipulator.SaveFormat.JPEG },
+        );
+        current = result.uri;
+      }
+
+      // Final check
+      const finalInfo = await FileSystem.getInfoAsync(current);
+      return (finalInfo as any).size <= MAX_IMAGE_BYTES ? current : null;
+    } catch {
+      return null;
     }
+  };
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.8,
-    });
+  // ─────────────────────────────────────────────────────────────────────────
+  // ✅ FIX — IMAGE SLOT HANDLERS
+  //
+  // ROOT CAUSE OF BOTH BUGS:
+  //
+  // OLD CODE called pickPhotoFromCamera() / pickPhoto() which wrote into
+  // photoUri / photoBase64 state — completely separate from the images[]
+  // array that the grid renders from. So:
+  //   - Camera: triggered a state update that caused a re-render/crash
+  //     because the state write had no index and wasn't connected to the grid.
+  //   - Gallery: photo was stored in photoUri but never appeared in images[],
+  //     so the slot stayed blank.
+  //
+  // FIX: Both functions now accept an `index` parameter and write directly
+  // into images[] at that position. This is the ONLY state that the grid
+  // reads from.
+  //
+  // Both functions also validate the 200KB limit AFTER compression and show
+  // a user-friendly Alert if the image is still too large.
+  // ─────────────────────────────────────────────────────────────────────────
+  const pickImageFromCamera = async (index: number) => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission needed",
+          "Camera permission is required to take a photo.",
+        );
+        return;
+      }
 
-    if (!result.canceled) {
-      const uri = result.assets[0].uri;
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        quality: 1, // capture at full quality — compression happens below
+      });
+
+      if (result.canceled) return;
+
+      const raw = result.assets[0].uri;
+      const compressed = await compressToLimit(raw);
+
+      if (!compressed) {
+        // ✅ Validation: image still too large after all compression passes
+        Alert.alert(
+          "Image Too Large",
+          "The photo exceeds the 200KB limit even after compression. Please choose a different photo or reduce the image resolution in your camera settings.",
+          [{ text: "OK" }],
+        );
+        return;
+      }
+
+      // ✅ Write into images[] at the correct slot index
       setImages((prev) => {
         const updated = [...prev];
-        updated[index] = uri;
+        updated[index] = compressed;
         return updated;
       });
       if (errors.images)
@@ -265,9 +342,139 @@ export default function PersonalDetailsScreen() {
           delete n.images;
           return n;
         });
+    } catch (e) {
+      console.error("[pickImageFromCamera]", e);
+      Alert.alert("Error", "Could not open camera. Please try again.");
     }
   };
 
+  const pickImageFromGallery = async (index: number) => {
+    try {
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission needed",
+          "Gallery permission is required to select a photo.",
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        quality: 1, // pick at full quality — compression happens below
+      });
+
+      if (result.canceled) return;
+
+      const raw = result.assets[0].uri;
+      const compressed = await compressToLimit(raw);
+
+      if (!compressed) {
+        // ✅ Validation: image too large even after compression
+        Alert.alert(
+          "Image Too Large",
+          "The selected photo exceeds the 200KB limit even after compression. Please choose a smaller image.",
+          [{ text: "OK" }],
+        );
+        return;
+      }
+
+      // ✅ Write into images[] at the correct slot index
+      setImages((prev) => {
+        const updated = [...prev];
+        updated[index] = compressed;
+        return updated;
+      });
+      if (errors.images)
+        setErrors((prev) => {
+          const n = { ...prev };
+          delete n.images;
+          return n;
+        });
+    } catch (e) {
+      console.error("[pickImageFromGallery]", e);
+      Alert.alert("Error", "Could not open gallery. Please try again.");
+    }
+  };
+
+  // ✅ FIX — Prompt that passes the slot index to the correct picker
+  const promptImageSource = (index: number) => {
+    Alert.alert("Add Hospital Photo", "Choose source", [
+      { text: "Camera", onPress: () => pickImageFromCamera(index) },
+      { text: "Gallery", onPress: () => pickImageFromGallery(index) },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
+  // const handleUpdate = async () => {
+  //   const validationErrors = validatePersonalDetails(form, images.length);
+  //   if (Object.keys(validationErrors).length > 0) {
+  //     setErrors(validationErrors as Record<string, string>);
+  //     return;
+  //   }
+  //   setSaving(true);
+  //   const tempFiles: string[] = [];
+  //   try {
+  //     const fd = new FormData();
+  //     fd.append("vendor_id", vendorId as string);
+  //     fd.append("full_name", form.hospitalName);
+  //     fd.append("email", form.email);
+  //     fd.append("mobile", form.mobile);
+  //     fd.append("mobile_1", form.altMobile || "");
+  //     fd.append("Ph_L", form.landline || "");
+  //     fd.append("adrs_1", form.addressLine1);
+  //     fd.append("adrs_2", form.addressLine2 || "");
+  //     fd.append("City", form.city);
+  //     fd.append("State", form.state);
+  //     fd.append("pin_code", form.pinCode);
+  //     fd.append("Summary", form.aboutUs || "test");
+  //     fd.append("Latitude", String(Number(form.latitude)));
+  //     fd.append("Longitude", String(Number(form.longitude)));
+
+  //     for (let i = 0; i < images.length; i++) {
+  //       const uri = images[i];
+  //       if (uri.startsWith("file://") || uri.startsWith("content://")) {
+  //         const filename = uri.split("/").pop() ?? `image_${i}.jpg`;
+  //         (fd as any).append("images", { uri, name: filename, type: "image/jpeg" });
+  //       } else if (uri.startsWith("data:")) {
+  //         // Existing API image stored as base64 — write to a temp file so it
+  //         // can be included in the multipart upload. Without this the server
+  //         // receives no images and wipes them on every save.
+  //         const base64 = uri.split(",")[1];
+  //         const tempPath = `${FileSystem.cacheDirectory}hosp_img_${i}_${Date.now()}.jpg`;
+  //         await FileSystem.writeAsStringAsync(tempPath, base64, {
+  //           encoding: FileSystem.EncodingType.Base64,
+  //         });
+  //         tempFiles.push(tempPath);
+  //         (fd as any).append("images", { uri: tempPath, name: `image_${i}.jpg`, type: "image/jpeg" });
+  //       }
+  //     }
+
+  //     const response = await fetch(
+  //       "https://coreapi-service-111763741518.asia-south1.run.app/api/Hospital/UpdateHosPersonnelInfo",
+  //       {
+  //         method: "PUT",
+  //         headers: { Authorization: `Bearer ${auth?.user?.token}` },
+  //         body: fd,
+  //       },
+  //     );
+  //     const data = await response.json();
+  //     if (!response.ok) throw new Error(data?.message || "Update failed");
+
+  //     setOriginalForm(form);
+  //     setOriginalImages(images);
+  //     setIsEditing(false);
+  //     setShowSuccessModal(true);
+  //   } catch (e: any) {
+  //     console.log("❌ ERROR:", e);
+  //     showStatus("Failed to save. Please try again.", false);
+  //   } finally {
+  //     setSaving(false);
+  //     tempFiles.forEach((p) => FileSystem.deleteAsync(p, { idempotent: true }).catch(() => {}));
+  //   }
+  // };
   const handleUpdate = async () => {
     const validationErrors = validatePersonalDetails(form, images.length);
     if (Object.keys(validationErrors).length > 0) {
@@ -276,10 +483,12 @@ export default function PersonalDetailsScreen() {
     }
 
     setSaving(true);
+    const tempFiles: string[] = [];
 
     try {
       const fd = new FormData();
 
+      // Text fields
       fd.append("vendor_id", vendorId as string);
       fd.append("full_name", form.hospitalName);
       fd.append("email", form.email);
@@ -288,20 +497,42 @@ export default function PersonalDetailsScreen() {
       fd.append("Ph_L", form.landline || "");
       fd.append("adrs_1", form.addressLine1);
       fd.append("adrs_2", form.addressLine2 || "");
-      // ⚠️ CASE SENSITIVE (DO NOT CHANGE)
       fd.append("City", form.city);
       fd.append("State", form.state);
       fd.append("pin_code", form.pinCode);
-      fd.append("Summary", form.aboutUs || "test");
-      fd.append("Latitude", String(Number(form.latitude)));
-      fd.append("Longitude", String(Number(form.longitude)));
+      fd.append("Summary", form.aboutUs || "");
+      fd.append("Latitude", String(Number(form.latitude) || 0));
+      fd.append("Longitude", String(Number(form.longitude) || 0));
 
-      images.forEach((uri, i) => {
-        if (uri.startsWith("file://") || uri.startsWith("content://")) {
-          const filename = uri.split("/").pop() ?? `image_${i}.jpg`;
-          (fd as any).append("images", { uri, name: filename, type: "image/jpeg" });
+      // ── CRITICAL FIX: Multiple Images with Array Notation ──
+      for (let i = 0; i < images.length; i++) {
+        const uri = images[i];
+        if (!uri) continue;
+
+        let fileUri: string = uri;
+        const fileName = `hospital_image_${Date.now()}_${i}.jpg`;
+
+        if (uri.startsWith("data:")) {
+          // Old base64 image from API
+          const base64 = uri.split(",")[1];
+          const tempPath = `${FileSystem.cacheDirectory}hosp_img_${i}_${Date.now()}.jpg`;
+
+          await FileSystem.writeAsStringAsync(tempPath, base64, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+
+          tempFiles.push(tempPath);
+          fileUri = tempPath;
         }
-      });
+        // New images (file:// from compression) are used directly
+
+        // Use array-style key: "images[]" or "images[0]", "images[1]" — most backends accept this
+        (fd as any).append(`images[${i}]`, {
+          uri: fileUri,
+          name: fileName,
+          type: "image/jpeg",
+        });
+      }
 
       const response = await fetch(
         "https://coreapi-service-111763741518.asia-south1.run.app/api/Hospital/UpdateHosPersonnelInfo",
@@ -309,30 +540,39 @@ export default function PersonalDetailsScreen() {
           method: "PUT",
           headers: {
             Authorization: `Bearer ${auth?.user?.token}`,
-            // ❌ DO NOT ADD Content-Type for multipart/form-data
+            // IMPORTANT: Do NOT manually set Content-Type
           },
           body: fd,
-        }
+        },
       );
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error("Server error:", errText);
+        throw new Error(`Update failed: ${response.status}`);
+      }
 
       const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data?.message || "Update failed");
-      }
+      // ── FORCE REFRESH FROM SERVER (critical) ──
+      await loadProfile();
 
-      setOriginalForm(form);
-      setOriginalImages(images);
+      setOriginalForm({ ...form });
+      setOriginalImages([...images]);
       setIsEditing(false);
-      showStatus("Details saved successfully.", true);
+      setShowSuccessModal(true);
     } catch (e: any) {
-      console.log("❌ ERROR:", e);
-      showStatus("Failed to save. Please try again.", false);
+      console.error("Update error:", e);
+      showStatus("Failed to update profile. Please try again.", false);
     } finally {
       setSaving(false);
+
+      // Cleanup temp files
+      tempFiles.forEach((path) => {
+        FileSystem.deleteAsync(path, { idempotent: true }).catch(() => {});
+      });
     }
   };
-
   if (loading) {
     return (
       <SafeAreaView style={styles.centered} edges={["top"]}>
@@ -352,15 +592,29 @@ export default function PersonalDetailsScreen() {
           style={styles.backBtn}
           activeOpacity={0.7}
         >
-          <MaterialIcons name="arrow-back" size={24} color={Colors.light.onSurface} />
+          <MaterialIcons
+            name="arrow-back"
+            size={24}
+            color={Colors.light.onSurface}
+          />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Personal Details</Text>
         {isEditing ? (
-          <TouchableOpacity onPress={handleCancel} style={styles.editBtn} activeOpacity={0.7}>
-            <Text style={[styles.editBtnText, { color: Colors.light.error }]}>Cancel</Text>
+          <TouchableOpacity
+            onPress={handleCancel}
+            style={styles.editBtn}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.editBtnText, { color: Colors.light.error }]}>
+              Cancel
+            </Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity onPress={handleEdit} style={styles.editBtn} activeOpacity={0.7}>
+          <TouchableOpacity
+            onPress={handleEdit}
+            style={styles.editBtn}
+            activeOpacity={0.7}
+          >
             <Text style={styles.editBtnText}>Edit</Text>
           </TouchableOpacity>
         )}
@@ -403,13 +657,12 @@ export default function PersonalDetailsScreen() {
               editable={isEditing}
             />
 
-            {/* ── City with Google Places Autocomplete ── */}
+            {/* City */}
             <View style={{ zIndex: 9999 }}>
               <View style={fieldStyles.labelRow}>
                 <Text style={fieldStyles.label}>City</Text>
                 <Text style={fieldStyles.requiredStar}>*</Text>
               </View>
-
               {isEditing ? (
                 <>
                   <TextInput
@@ -429,8 +682,6 @@ export default function PersonalDetailsScreen() {
                   {errors.city && (
                     <Text style={fieldStyles.errorText}>{errors.city}</Text>
                   )}
-
-                  {/* Dropdown */}
                   {cityResults.length > 0 && (
                     <View style={styles.cityDropdown}>
                       <ScrollView
@@ -450,7 +701,10 @@ export default function PersonalDetailsScreen() {
                               color={Colors.light.outline}
                               style={{ marginRight: 6, marginTop: 1 }}
                             />
-                            <Text style={styles.cityDropdownText} numberOfLines={1}>
+                            <Text
+                              style={styles.cityDropdownText}
+                              numberOfLines={1}
+                            >
                               {item.description}
                             </Text>
                           </TouchableOpacity>
@@ -464,7 +718,7 @@ export default function PersonalDetailsScreen() {
               )}
             </View>
 
-            {/* ── State (auto-filled, always read-only) ── */}
+            {/* State */}
             <View style={fieldStyles.wrap}>
               <View style={fieldStyles.labelRow}>
                 <Text style={fieldStyles.label}>State</Text>
@@ -482,7 +736,7 @@ export default function PersonalDetailsScreen() {
               )}
             </View>
 
-            {/* ── PIN Code ── */}
+            {/* PIN Code */}
             <View style={fieldStyles.wrap}>
               <View style={fieldStyles.labelRow}>
                 <Text style={fieldStyles.label}>PIN Code</Text>
@@ -502,13 +756,12 @@ export default function PersonalDetailsScreen() {
                   onChangeText={(text) => {
                     const value = text.replace(/[^0-9]/g, "").slice(0, 6);
                     setForm((p) => ({ ...p, pinCode: value }));
-                    if (value.length === 6) {
+                    if (value.length === 6)
                       setErrors((prev) => {
                         const copy = { ...prev };
                         delete copy.pinCode;
                         return copy;
                       });
-                    }
                   }}
                 />
               ) : (
@@ -520,10 +773,18 @@ export default function PersonalDetailsScreen() {
             </View>
           </View>
 
-          {/* HOSPITAL IMAGES */}
+          {/* ── HOSPITAL IMAGES ── */}
           <Text style={styles.sectionLabel}>HOSPITAL IMAGES</Text>
           <View style={styles.section}>
             <View style={styles.imageGrid}>
+              {/*
+               * ✅ FIX — Each existing slot:
+               *   - Tap when NOT editing → open fullscreen viewer
+               *   - Tap when editing AND slot has image → prompt to replace
+               *   - Tap when editing AND slot is empty → prompt to add
+               * The promptImageSource(i) call passes the slot index so the
+               * correct images[i] entry is updated.
+               */}
               {Array.from({ length: imageSlots }).map((_, i) => {
                 const uri = images[i];
                 return (
@@ -531,10 +792,12 @@ export default function PersonalDetailsScreen() {
                     key={i}
                     style={styles.imageSlot}
                     onPress={() => {
-                      if (uri) {
-                        setViewingImage(uri);
+                      if (!isEditing && uri) {
+                        // View mode: open fullscreen
+                        setViewingImageUri(uri);
                       } else if (isEditing) {
-                        pickImage(i);
+                        // Edit mode: pick new image for this slot
+                        promptImageSource(i);
                       }
                     }}
                     activeOpacity={0.8}
@@ -556,29 +819,38 @@ export default function PersonalDetailsScreen() {
                           color={Colors.light.outline}
                         />
                         {isEditing && (
-                          <Text style={styles.imagePlaceholderText}>Add Photo</Text>
+                          <Text style={styles.imagePlaceholderText}>
+                            Add Photo
+                          </Text>
                         )}
                       </View>
                     )}
                   </TouchableOpacity>
                 );
               })}
+
+              {/* ✅ FIX — "+" slot appends a new image at images.length index */}
               {isEditing && (
                 <TouchableOpacity
                   style={[styles.imageSlot, styles.imageAddSlot]}
-                  onPress={() => pickImage(images.length)}
+                  onPress={() => promptImageSource(images.length)}
                   activeOpacity={0.8}
                 >
-                  <MaterialIcons name="add" size={28} color={Colors.light.primary} />
+                  <MaterialIcons
+                    name="add"
+                    size={28}
+                    color={Colors.light.primary}
+                  />
                 </TouchableOpacity>
               )}
             </View>
+
             {errors.images && (
               <Text style={styles.imageError}>{errors.images}</Text>
             )}
             <Text style={styles.imageHint}>
               {isEditing
-                ? `Minimum ${MIN_IMAGES} images required`
+                ? `Minimum ${MIN_IMAGES} images required · max 200KB each`
                 : `${images.length} image${images.length !== 1 ? "s" : ""}`}
             </Text>
           </View>
@@ -690,7 +962,9 @@ export default function PersonalDetailsScreen() {
                   placeholder="Tell patients about your hospital..."
                   placeholderTextColor={Colors.light.outline}
                 />
-                <Text style={styles.charCount}>{form.aboutUs.length} / 1000</Text>
+                <Text style={styles.charCount}>
+                  {form.aboutUs.length} / 1000
+                </Text>
                 {errors.aboutUs && (
                   <Text style={fieldStyles.errorText}>{errors.aboutUs}</Text>
                 )}
@@ -711,7 +985,9 @@ export default function PersonalDetailsScreen() {
               <MaterialIcons
                 name={statusMsg.ok ? "check-circle" : "error-outline"}
                 size={16}
-                color={statusMsg.ok ? Colors.light.tertiary : Colors.light.error}
+                color={
+                  statusMsg.ok ? Colors.light.tertiary : Colors.light.error
+                }
               />
               <Text
                 style={[
@@ -752,31 +1028,42 @@ export default function PersonalDetailsScreen() {
 
       {/* Fullscreen image viewer */}
       <Modal
-        visible={!!viewingImage}
+        visible={!!viewingImageUri}
         transparent
         animationType="fade"
-        onRequestClose={() => setViewingImage(null)}
+        onRequestClose={() => setViewingImageUri(null)}
       >
         <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
-          onPress={() => setViewingImage(null)}
+          onPress={() => setViewingImageUri(null)}
         >
-          {viewingImage && (
+          {viewingImageUri && (
             <Image
-              source={{ uri: viewingImage }}
+              source={{ uri: viewingImageUri }}
               style={styles.fullImage}
               resizeMode="contain"
             />
           )}
           <TouchableOpacity
             style={styles.modalClose}
-            onPress={() => setViewingImage(null)}
+            onPress={() => setViewingImageUri(null)}
           >
             <MaterialIcons name="close" size={24} color="#fff" />
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      <ActionModal
+        visible={showSuccessModal}
+        title="Profile Updated"
+        message="Personal information updated successfully."
+        confirmText="OK"
+        iconColor={Colors.light.primary}
+        buttonColor={Colors.light.primary}
+        iconName="check-circle"
+        onConfirm={() => setShowSuccessModal(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -861,10 +1148,7 @@ const fieldStyles = StyleSheet.create({
     fontSize: FontSize.bodyMedium,
     color: Colors.light.onSurface,
   },
-  inputError: {
-    borderWidth: 1,
-    borderColor: Colors.light.error,
-  },
+  inputError: { borderWidth: 1, borderColor: Colors.light.error },
   valueText: {
     fontFamily: FontFamily.body,
     fontSize: FontSize.bodyMedium,
@@ -873,12 +1157,9 @@ const fieldStyles = StyleSheet.create({
   },
 });
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.light.surface },
   centered: { flex: 1, justifyContent: "center", alignItems: "center" },
-
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -913,10 +1194,8 @@ const styles = StyleSheet.create({
     fontSize: FontSize.bodyMedium,
     color: Colors.light.primary,
   },
-
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: Spacing.md, paddingTop: Spacing.md },
-
   sectionLabel: {
     fontFamily: FontFamily.label,
     fontSize: FontSize.labelSmall,
@@ -933,8 +1212,6 @@ const styles = StyleSheet.create({
     ...Shadow.subtle,
   },
   row2: { flexDirection: "row", gap: Spacing.sm },
-
-  // City autocomplete dropdown
   cityDropdown: {
     backgroundColor: "#fff",
     borderRadius: Radius.lg,
@@ -961,8 +1238,6 @@ const styles = StyleSheet.create({
     fontSize: FontSize.bodySmall,
     color: Colors.light.onSurface,
   },
-
-  // Images
   imageGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1020,16 +1295,12 @@ const styles = StyleSheet.create({
     color: Colors.light.outline,
     marginTop: 4,
   },
-
-  // Map
   mapContainer: {
     height: 220,
     borderRadius: Radius.lg,
     overflow: "hidden",
     marginBottom: Spacing.sm,
   },
-
-  // About
   aboutInput: {
     backgroundColor: Colors.light.surfaceContainerLow,
     borderRadius: Radius.lg,
@@ -1039,10 +1310,7 @@ const styles = StyleSheet.create({
     minHeight: 120,
     textAlignVertical: "top",
   },
-  inputError: {
-    borderWidth: 1,
-    borderColor: Colors.light.error,
-  },
+  inputError: { borderWidth: 1, borderColor: Colors.light.error },
   charCount: {
     fontFamily: FontFamily.body,
     fontSize: FontSize.labelSmall,
@@ -1056,8 +1324,6 @@ const styles = StyleSheet.create({
     color: Colors.light.onSurface,
     lineHeight: 22,
   },
-
-  // Banner
   banner: {
     flexDirection: "row",
     alignItems: "center",
@@ -1073,8 +1339,6 @@ const styles = StyleSheet.create({
     fontSize: FontSize.bodySmall,
     flex: 1,
   },
-
-  // Update bar
   updateBar: {
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
@@ -1094,8 +1358,6 @@ const styles = StyleSheet.create({
     fontSize: FontSize.bodyMedium,
     color: "#fff",
   },
-
-  // Fullscreen image modal
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.92)",

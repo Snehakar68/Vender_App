@@ -23,6 +23,7 @@ import {
 import { Department } from '@/src/features/services/constants/departments';
 import { AuthContext } from '@/src/core/context/AuthContext';
 import api from '@/src/core/api/apiClient';
+import ActionModal from '@/src/shared/components/ActionModal';
 
 // ── Icon helper (matches department name to icon) ─────────────────────────────
 const getDepartmentIcon = (name: string): string => {
@@ -42,6 +43,15 @@ const getDepartmentIcon = (name: string): string => {
   if (n.includes('oncol') || n.includes('cancer')) return 'biotech';
   if (n.includes('urol') || n.includes('kidney')) return 'water-drop';
   if (n.includes('general') || n.includes('medicine')) return 'local-hospital';
+  if (n.includes('ambulance') || n.includes('emergency') || n.includes('rescue')) return 'emergency';
+  if (n.includes('icu') || n.includes('intensive') || n.includes('critical')) return 'monitor-heart';
+  if (n.includes('pharma') || n.includes('dispensar')) return 'local-pharmacy';
+  if (n.includes('diagnos') || n.includes('pathol') || n.includes('lab')) return 'science';
+  if (n.includes('surg') || n.includes('operation') || n.includes('theatre')) return 'healing';
+  if (n.includes('blood') || n.includes('hemo') || n.includes('transfus')) return 'bloodtype';
+  if (n.includes('neonatal') || n.includes('nicu') || n.includes('newborn')) return 'child-care';
+  if (n.includes('trauma') || n.includes('accident')) return 'emergency';
+  if (n.includes('nutrition') || n.includes('diet')) return 'restaurant';
   return 'medical-services';
 };
 
@@ -55,6 +65,8 @@ export default function SelectServicesScreen() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState('');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [updatedNames, setUpdatedNames] = useState('');
 
   useEffect(() => {
     if (vendorId) {
@@ -124,7 +136,12 @@ export default function SelectServicesScreen() {
 
       console.log('Update result:', res.data);
 
-      router.replace('/(hospital)/services/your-services');
+      const names = departments
+        .filter(d => selected.has(d.id))
+        .map(d => d.name)
+        .join(', ');
+      setUpdatedNames(names);
+      setShowSuccessModal(true);
     } catch (err) {
       console.log('❌ Update services error', err);
       setError('Failed to update services. Please try again.');
@@ -181,7 +198,12 @@ export default function SelectServicesScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Select Services</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>Select Services</Text>
+          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7}>
+            <Text style={styles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
         <Text style={styles.subtitle}>
           Choose the departments you wish to subscribe to for homecare assistance.
         </Text>
@@ -221,6 +243,20 @@ export default function SelectServicesScreen() {
           )}
         </TouchableOpacity>
       </View>
+
+      <ActionModal
+        visible={showSuccessModal}
+        title="Services Updated"
+        message={`Active departments: ${updatedNames}`}
+        confirmText="OK"
+        iconName="check-circle"
+        iconColor={Colors.light.primary}
+        buttonColor={Colors.light.primary}
+        onConfirm={() => {
+          setShowSuccessModal(false);
+          router.replace('/(hospital)/services/your-services');
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -233,11 +269,21 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.sm,
     paddingBottom: Spacing.md,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.xs,
+  },
   title: {
     fontFamily: FontFamily.headline,
     fontSize: FontSize.headlineLarge,
     color: Colors.light.onSurface,
-    marginBottom: Spacing.xs,
+  },
+  cancelText: {
+    fontFamily: FontFamily.bodyMedium,
+    fontSize: FontSize.bodyMedium,
+    color: Colors.light.primary,
   },
   subtitle: {
     fontFamily: FontFamily.body,

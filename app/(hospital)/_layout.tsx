@@ -76,8 +76,6 @@ export default function HospitalLayout() {
             ),
           }}
         />
-        <Tabs.Screen name="doctor-details/[id]" options={{ href: null }} />
-        <Tabs.Screen name="nurse-details/[id]" options={{ href: null }} />
       </Tabs>
     </SafeAreaView>
   );

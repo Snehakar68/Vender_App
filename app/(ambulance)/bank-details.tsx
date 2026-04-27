@@ -16,10 +16,29 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { AmbColors, AmbRadius, AmbShadow } from '@/src/features/ambulance/constants/ambulanceTheme';
 import TransactionalHeader from '@/src/features/ambulance/components/TransactionalHeader';
 import { AuthContext } from '@/src/core/context/AuthContext';
+import ActionModal from '@/src/shared/components/ActionModal';
 
 const BASE_URL = 'https://coreapi-service-111763741518.asia-south1.run.app';
 
 const ACCOUNT_TYPES = ['Savings Account', 'Current Account', 'Salary Account'];
+
+// GET returns abbreviated type codes — map them to display labels
+const ACCOUNT_TYPE_MAP: Record<string, string> = {
+  S:  'Savings Account',
+  C:  'Current Account',
+  SA: 'Salary Account',
+  // full strings pass through unchanged
+  'Savings Account':  'Savings Account',
+  'Current Account':  'Current Account',
+  'Salary Account':   'Salary Account',
+};
+
+// Map display label → abbreviated code for the save payload
+const ACCOUNT_TYPE_CODE: Record<string, string> = {
+  'Savings Account': 'S',
+  'Current Account': 'C',
+  'Salary Account':  'SA',
+};
 
 type FormState = {
   bankName: string;
@@ -53,28 +72,55 @@ export default function AmbulanceBankDetailsScreen() {
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [showTypeMenu, setShowTypeMenu] = useState(false);
-  const [status, setStatus] = useState<{ text: string; ok: boolean } | null>(null);
+  const [isNew, setIsNew] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
+  // ─── Load ────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
     if (!vendorId) { setLoading(false); return; }
     try {
-      const res = await fetch(`${BASE_URL}/api/Bank/GetBankDetailsById/${vendorId}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      const res = await fetch(
+        `${BASE_URL}/api/Bank/GetBankDetailsById/${vendorId}`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+      );
       const d = await res.json();
-      const loaded: FormState = {
-        bankName:      d.BankName           ?? d.bank_name      ?? '',
-        branch:        d.BranchName         ?? d.branch         ?? '',
-        ifsc:          d.IFSCCode           ?? d.ifsc           ?? '',
-        holderName:    d.Account_HolderName ?? d.account_holder ?? '',
-        accountNumber: d.account_number     ?? '',
-        confirmAccount: d.account_number    ?? '',
-        accountType:   d.account_type       ?? 'Savings Account',
-      };
-      setForm(loaded);
-      setBackup(loaded);
+      console.log('Bank details fetched:', d);
+
+      // ── FIX: use the actual field names returned by GET ─────────────────
+      // Response shape:
+      // { vendorId, bankName, branchName, ifscCode,
+      //   accountHolderName, accountNumber, accountType }
+      const hasData =
+        d &&
+        typeof d === 'object' &&
+        !Array.isArray(d) &&
+        (d.bankName || d.accountNumber);
+
+      if (hasData) {
+        // accountType may come back as a short code ("S", "C", "SA")
+        // — resolve it to the full display label used in the dropdown.
+        const resolvedType =
+          ACCOUNT_TYPE_MAP[d.accountType] ?? 'Savings Account';
+
+        const loaded: FormState = {
+          bankName:       d.bankName            ?? '',
+          branch:         d.branchName          ?? '',
+          ifsc:           d.ifscCode            ?? '',
+          holderName:     d.accountHolderName   ?? '',
+          accountNumber:  d.accountNumber       ?? '',
+          confirmAccount: d.accountNumber       ?? '',
+          accountType:    resolvedType,
+        };
+        setForm(loaded);
+        setBackup(loaded);
+        setIsNew(false);
+      } else {
+        setIsNew(true);
+      }
     } catch (e) {
       console.log('Bank details fetch error:', e);
+      setIsNew(true);
     } finally {
       setLoading(false);
     }
@@ -82,11 +128,7 @@ export default function AmbulanceBankDetailsScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  useEffect(() => {
-    if (!status) return;
-    const t = setTimeout(() => setStatus(null), 3500);
-    return () => clearTimeout(t);
-  }, [status]);
+  // ─── Form helpers ────────────────────────────────────────────────────────
 
   function update(key: keyof FormState, val: string) {
     setForm(prev => ({ ...prev, [key]: val }));
@@ -109,49 +151,78 @@ export default function AmbulanceBankDetailsScreen() {
 
   function validate(): boolean {
     const err: Partial<Record<keyof FormState, string>> = {};
-    if (!form.bankName.trim()) err.bankName = 'Bank name is required';
-    if (!form.branch.trim()) err.branch = 'Branch is required';
-    if (!form.ifsc.trim()) err.ifsc = 'IFSC code is required';
-    else if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(form.ifsc)) err.ifsc = 'Invalid IFSC format (e.g. HDFC0001234)';
-    if (!form.holderName.trim()) err.holderName = 'Account holder name is required';
-    if (!form.accountNumber.trim()) err.accountNumber = 'Account number is required';
-    if (form.accountNumber !== form.confirmAccount) err.confirmAccount = 'Account numbers do not match';
+    if (!form.bankName.trim())        err.bankName       = 'Bank name is required';
+    if (!form.branch.trim())          err.branch         = 'Branch is required';
+    if (!form.ifsc.trim())            err.ifsc           = 'IFSC code is required';
+    else if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(form.ifsc))
+                                      err.ifsc           = 'Invalid IFSC format (e.g. HDFC0001234)';
+    if (!form.holderName.trim())      err.holderName     = 'Account holder name is required';
+    if (!form.accountNumber.trim())   err.accountNumber  = 'Account number is required';
+    if (form.accountNumber !== form.confirmAccount)
+                                      err.confirmAccount = 'Account numbers do not match';
     setErrors(err);
     return Object.keys(err).length === 0;
   }
 
+  // ─── Save ────────────────────────────────────────────────────────────────
   async function handleSave() {
     if (!validate()) return;
     setSaving(true);
     try {
-      const res = await fetch(`${BASE_URL}/api/Bank/UpdateBankDetails`, {
-        method: 'PUT',
+      // Send the abbreviated code so the API accepts it consistently
+      const accountTypeCode = ACCOUNT_TYPE_CODE[form.accountType] ?? form.accountType;
+
+      const payload = {
+        vendor_id:          vendorId,
+        BankName:           form.bankName,
+        BranchName:         form.branch,
+        IFSCCode:           form.ifsc,
+        Account_HolderName: form.holderName,
+        account_number:     form.accountNumber,
+        account_type:       accountTypeCode,
+      };
+
+      const endpoint = isNew
+        ? `${BASE_URL}/api/Bank/CreateBankDetails`
+        : `${BASE_URL}/api/Bank/UpdateBankDetails`;
+
+      const method = isNew ? 'POST' : 'PUT';
+
+      const res = await fetch(endpoint, {
+        method,
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          vendor_id:          vendorId,
-          BankName:           form.bankName,
-          BranchName:         form.branch,
-          IFSCCode:           form.ifsc,
-          Account_HolderName: form.holderName,
-          account_number:     form.accountNumber,
-          account_type:       form.accountType,
-        }),
+        body: JSON.stringify(payload),
       });
+
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.message || 'Update failed');
+      if (!res.ok) throw new Error(data?.message || 'Save failed');
+
+      if (isNew) setIsNew(false);
+
       setBackup(form);
       setIsEditing(false);
       setShowTypeMenu(false);
-      setStatus({ text: data?.message || 'Bank details saved successfully.', ok: true });
+
+      setSuccessMessage(
+        data?.message ||
+        (isNew ? 'Bank details created successfully.' : 'Bank details updated successfully.'),
+      );
+      setShowSuccessModal(true);
+
     } catch (e: any) {
-      setStatus({ text: e.message || 'Failed to save. Please try again.', ok: false });
+      setErrors(prev => ({
+        ...prev,
+        bankName: e.message || 'Failed to save. Please try again.',
+      }));
     } finally {
       setSaving(false);
     }
   }
+
+  // ─── Loading ─────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -164,6 +235,8 @@ export default function AmbulanceBankDetailsScreen() {
       </SafeAreaView>
     );
   }
+
+  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -181,14 +254,14 @@ export default function AmbulanceBankDetailsScreen() {
               size={14}
               color={isEditing ? AmbColors.error : AmbColors.primary}
             />
-            {/* <Text style={[styles.editBtnText, isEditing && styles.editBtnTextActive]}>
-              {isEditing ? 'Cancel' : 'Edit'}
-            </Text> */}
           </TouchableOpacity>
         }
       />
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
         <ScrollView
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
@@ -199,8 +272,8 @@ export default function AmbulanceBankDetailsScreen() {
             <View style={styles.infoBannerContent}>
               <Text style={styles.infoBannerTitle}>Secure Payments</Text>
               <Text style={styles.infoBannerDesc}>
-                Please ensure your bank information is accurate. This account will be used for your
-                monthly service reimbursements and incentives.
+                Please ensure your bank information is accurate. This account will be
+                used for your monthly service reimbursements and incentives.
               </Text>
             </View>
             <MaterialIcons
@@ -211,16 +284,13 @@ export default function AmbulanceBankDetailsScreen() {
             />
           </View>
 
-          {/* ── Status Banner ── */}
-          {!!status && (
-            <View style={[styles.statusBanner, status.ok ? styles.statusBannerOk : styles.statusBannerErr]}>
-              <MaterialIcons
-                name={status.ok ? 'check-circle' : 'error-outline'}
-                size={16}
-                color={status.ok ? AmbColors.tertiary : AmbColors.error}
-              />
-              <Text style={[styles.statusText, { color: status.ok ? AmbColors.tertiary : AmbColors.error }]}>
-                {status.text}
+          {/* ── "No record yet" notice (view mode only) ── */}
+          {isNew && !isEditing && (
+            <View style={styles.emptyNotice}>
+              <MaterialIcons name="info-outline" size={16} color={AmbColors.primary} />
+              <Text style={styles.emptyNoticeText}>
+                No bank details saved yet. Tap{' '}
+                <Text style={{ fontFamily: 'Inter_600SemiBold' }}>Edit</Text> to add your account.
               </Text>
             </View>
           )}
@@ -239,7 +309,8 @@ export default function AmbulanceBankDetailsScreen() {
             />
             <Field
               label="IFSC Code" icon="tag" value={form.ifsc}
-              placeholder="HDFC0001234" editable={isEditing} autoCapitalize="characters"
+              placeholder="HDFC0001234" editable={isEditing}
+              autoCapitalize="characters"
               onChangeText={v => update('ifsc', v.toUpperCase())} error={errors.ifsc}
             />
             <Field
@@ -251,14 +322,19 @@ export default function AmbulanceBankDetailsScreen() {
               label="Account Number" icon="numbers" value={form.accountNumber}
               placeholder="Enter account number" editable={isEditing}
               keyboardType="numeric" masked={!isEditing}
-              onChangeText={v => update('accountNumber', v)} error={errors.accountNumber}
+              onChangeText={v => update('accountNumber', v)}
+              error={errors.accountNumber}
             />
 
+            {/* Confirm field only visible while editing */}
             {isEditing && (
               <Field
-                label="Confirm Account Number" icon="verified-user" value={form.confirmAccount}
-                placeholder="Re-enter account number" editable keyboardType="numeric"
-                onChangeText={v => update('confirmAccount', v)} error={errors.confirmAccount}
+                label="Confirm Account Number" icon="verified-user"
+                value={form.confirmAccount}
+                placeholder="Re-enter account number"
+                editable keyboardType="numeric"
+                onChangeText={v => update('confirmAccount', v)}
+                error={errors.confirmAccount}
               />
             )}
 
@@ -274,7 +350,12 @@ export default function AmbulanceBankDetailsScreen() {
                     onPress={() => setShowTypeMenu(p => !p)}
                     activeOpacity={0.75}
                   >
-                    <MaterialIcons name="account-tree" size={18} color={AmbColors.outline} style={styles.inputIcon} />
+                    <MaterialIcons
+                      name="account-tree"
+                      size={18}
+                      color={AmbColors.outline}
+                      style={styles.inputIcon}
+                    />
                     <Text style={styles.dropdownValue}>{form.accountType}</Text>
                     <MaterialIcons
                       name={showTypeMenu ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
@@ -282,17 +363,25 @@ export default function AmbulanceBankDetailsScreen() {
                       color={AmbColors.outline}
                     />
                   </TouchableOpacity>
-                  {errors.accountType ? <Text style={styles.errorText}>{errors.accountType}</Text> : null}
+                  {errors.accountType
+                    ? <Text style={styles.errorText}>{errors.accountType}</Text>
+                    : null}
                   {showTypeMenu && (
                     <View style={styles.dropdownMenu}>
                       {ACCOUNT_TYPES.map(type => (
                         <TouchableOpacity
                           key={type}
-                          style={[styles.dropdownItem, form.accountType === type && styles.dropdownItemActive]}
+                          style={[
+                            styles.dropdownItem,
+                            form.accountType === type && styles.dropdownItemActive,
+                          ]}
                           onPress={() => { update('accountType', type); setShowTypeMenu(false); }}
                           activeOpacity={0.7}
                         >
-                          <Text style={[styles.dropdownItemText, form.accountType === type && styles.dropdownItemTextActive]}>
+                          <Text style={[
+                            styles.dropdownItemText,
+                            form.accountType === type && styles.dropdownItemTextActive,
+                          ]}>
                             {type}
                           </Text>
                           {form.accountType === type && (
@@ -305,7 +394,12 @@ export default function AmbulanceBankDetailsScreen() {
                 </>
               ) : (
                 <View style={[styles.inputWrapper, styles.inputDisabled]}>
-                  <MaterialIcons name="account-tree" size={18} color={AmbColors.outline} style={styles.inputIcon} />
+                  <MaterialIcons
+                    name="account-tree"
+                    size={18}
+                    color={AmbColors.outline}
+                    style={styles.inputIcon}
+                  />
                   <Text style={styles.readValue}>{form.accountType || '—'}</Text>
                 </View>
               )}
@@ -323,7 +417,9 @@ export default function AmbulanceBankDetailsScreen() {
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <>
-                    <Text style={styles.saveBtnText}>Save Bank Details</Text>
+                    <Text style={styles.saveBtnText}>
+                      {isNew ? 'Create Bank Details' : 'Save Bank Details'}
+                    </Text>
                     <MaterialIcons name="check-circle" size={20} color="#fff" />
                   </>
                 )}
@@ -331,19 +427,28 @@ export default function AmbulanceBankDetailsScreen() {
             )}
           </View>
 
-          {/* ── Security Note ── */}
           <Text style={styles.securityNote}>
-            Your data is encrypted and stored securely according to Jhilmil Homecare privacy policies.
+            Your data is encrypted and stored securely according to Jhilmil Homecare
+            privacy policies.
           </Text>
 
           <View style={{ height: 32 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <ActionModal
+        visible={showSuccessModal}
+        title={isNew ? 'Bank Details Saved' : 'Bank Details Updated'}
+        message={successMessage}
+        confirmText="OK"
+        iconName="check-circle"
+        onConfirm={() => setShowSuccessModal(false)}
+      />
     </SafeAreaView>
   );
 }
 
-// ─── Field ────────────────────────────────────────────────────────────────────
+// ─── Field component ──────────────────────────────────────────────────────────
 
 function Field({
   label, icon, value, placeholder, onChangeText,
@@ -354,15 +459,25 @@ function Field({
   autoCapitalize?: any; masked?: boolean;
   editable?: boolean; error?: string;
 }) {
-  const displayValue = masked && value ? '••••••••••••' + value.slice(-4) : value;
+  const displayValue =
+    masked && value ? '••••••••••••' + value.slice(-4) : value;
 
   return (
     <View style={styles.fieldGroup}>
       <Text style={styles.fieldLabel}>
         {label} <Text style={styles.required}>*</Text>
       </Text>
-      <View style={[styles.inputWrapper, !editable && styles.inputDisabled, error ? styles.inputError : null]}>
-        <MaterialIcons name={icon as any} size={18} color={AmbColors.outline} style={styles.inputIcon} />
+      <View style={[
+        styles.inputWrapper,
+        !editable && styles.inputDisabled,
+        error ? styles.inputError : null,
+      ]}>
+        <MaterialIcons
+          name={icon as any}
+          size={18}
+          color={AmbColors.outline}
+          style={styles.inputIcon}
+        />
         {editable ? (
           <TextInput
             style={styles.textInput}
@@ -382,157 +497,86 @@ function Field({
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Styles (unchanged from original) ────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: AmbColors.surface },
-  scroll: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20 },
-
+  safe:             { flex: 1, backgroundColor: AmbColors.background },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
-  loadingText: { fontFamily: 'Inter_400Regular', fontSize: 14, color: AmbColors.secondary },
-
-  // ── Header edit button
-  editBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    height: 34,
-    paddingHorizontal: 12,
-    borderRadius: AmbRadius.pill,
-    backgroundColor: `${AmbColors.primary}15`,
-  },
-  editBtnActive: { backgroundColor: `${AmbColors.error}15` },
-  editBtnText: { fontFamily: 'Inter_600SemiBold', fontSize: 13, color: AmbColors.primary },
-  editBtnTextActive: { color: AmbColors.error },
-
-  // ── Info banner
+  loadingText:      { fontFamily: 'Inter_400Regular', fontSize: 14, color: AmbColors.outline },
+  scroll:           { padding: 16, gap: 16 },
   infoBanner: {
+    borderRadius: AmbRadius.lg,
     backgroundColor: AmbColors.primary,
-    borderRadius: AmbRadius.xl,
     padding: 20,
-    marginBottom: 14,
+    overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
-    overflow: 'hidden',
-    ...AmbShadow.card,
   },
-  infoBannerContent: { flex: 1, paddingRight: 8 },
-  infoBannerTitle: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 18,
-    color: AmbColors.onPrimary,
-    marginBottom: 6,
-  },
-  infoBannerDesc: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    color: `${AmbColors.onPrimary}BB`,
-    lineHeight: 19,
-  },
-  infoBannerWatermark: {
-    opacity: 0.12,
-    position: 'absolute',
-    right: -10,
-    bottom: -10,
-  },
-
-  // ── Status
-  statusBanner: {
+  infoBannerContent:   { flex: 1, gap: 6 },
+  infoBannerTitle:     { fontFamily: 'Inter_700Bold',    fontSize: 16, color: AmbColors.onPrimary },
+  infoBannerDesc:      { fontFamily: 'Inter_400Regular', fontSize: 12, color: `${AmbColors.onPrimary}CC`, lineHeight: 18 },
+  infoBannerWatermark: { position: 'absolute', right: -10, bottom: -10, opacity: 0.15 },
+  emptyNotice: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    padding: 12, borderRadius: AmbRadius.md, marginBottom: 14,
+    backgroundColor: `${AmbColors.primary}12`,
+    borderRadius: AmbRadius.md,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: `${AmbColors.primary}30`,
   },
-  statusBannerOk: { backgroundColor: `${AmbColors.tertiary}12` },
-  statusBannerErr: { backgroundColor: AmbColors.errorContainer },
-  statusText: { fontFamily: 'Inter_500Medium', fontSize: 13, flex: 1 },
-
-  // ── Section card
+  emptyNoticeText: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 13, color: AmbColors.primary },
   section: {
-    backgroundColor: AmbColors.surfaceContainerLowest,
-    borderRadius: AmbRadius.xl,
-    padding: 20,
-    marginBottom: 14,
-    gap: 14,
-    ...AmbShadow.subtle,
+    backgroundColor: AmbColors.surface,
+    borderRadius: AmbRadius.lg,
+    padding: 16,
+    gap: 16,
+    ...AmbShadow.sm,
   },
-
-  // ── Fields
-  fieldGroup: { gap: 6 },
-  fieldLabel: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 10,
-    color: AmbColors.onSurfaceVariant,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  required: { color: AmbColors.error },
+  fieldGroup:    { gap: 6 },
+  fieldLabel:    { fontFamily: 'Inter_500Medium', fontSize: 13, color: AmbColors.onSurfaceVariant },
+  required:      { color: AmbColors.error },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: AmbColors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: AmbColors.outlineVariant,
     borderRadius: AmbRadius.md,
-    height: 50,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: AmbColors.surface,
+    gap: 8,
   },
-  inputDisabled: { backgroundColor: AmbColors.surfaceContainerHighest, opacity: 0.8 },
-  inputError: { borderWidth: 1, borderColor: AmbColors.error },
-  inputIcon: { marginRight: 10 },
-  textInput: {
-    flex: 1,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    color: AmbColors.onSurface,
-  },
-  readValue: {
-    flex: 1,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    color: AmbColors.onSurface,
-  },
-  errorText: { fontFamily: 'Inter_400Regular', fontSize: 11, color: AmbColors.error },
-
-  // ── Account type dropdown
-  dropdownValue: {
-    flex: 1,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    color: AmbColors.onSurface,
-  },
+  inputDisabled: { backgroundColor: `${AmbColors.outline}0A` },
+  inputError:    { borderColor: AmbColors.error },
+  inputIcon:     { width: 22 },
+  textInput:     { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 14, color: AmbColors.onSurface, padding: 0 },
+  readValue:     { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 14, color: AmbColors.onSurface },
+  errorText:     { fontFamily: 'Inter_400Regular', fontSize: 12, color: AmbColors.error },
+  dropdownValue: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 14, color: AmbColors.onSurface },
   dropdownMenu: {
-    backgroundColor: AmbColors.surfaceContainerLowest,
+    borderWidth: 1,
+    borderColor: AmbColors.outlineVariant,
     borderRadius: AmbRadius.md,
     overflow: 'hidden',
-    ...AmbShadow.card,
-  },
-  dropdownItem: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14,
-  },
-  dropdownItemActive: { backgroundColor: AmbColors.surfaceContainerLow },
-  dropdownItemText: { fontFamily: 'Inter_400Regular', fontSize: 14, color: AmbColors.onSurface },
-  dropdownItemTextActive: { fontFamily: 'Inter_600SemiBold', color: AmbColors.primary },
-
-  // ── Save button
-  saveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    height: 54,
-    backgroundColor: AmbColors.primary,
-    borderRadius: AmbRadius.md,
     marginTop: 4,
-    ...AmbShadow.card,
+  },
+  dropdownItem:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, backgroundColor: AmbColors.surface },
+  dropdownItemActive:   { backgroundColor: `${AmbColors.primary}12` },
+  dropdownItemText:     { fontFamily: 'Inter_400Regular', fontSize: 14, color: AmbColors.onSurface },
+  dropdownItemTextActive: { fontFamily: 'Inter_600SemiBold', color: AmbColors.primary },
+  saveBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, backgroundColor: AmbColors.primary,
+    borderRadius: AmbRadius.md, paddingVertical: 14,
   },
   saveBtnDisabled: { opacity: 0.6 },
-  saveBtnText: { fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' },
-
-  // ── Bottom note
-  securityNote: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    color: AmbColors.outline,
-    textAlign: 'center',
-    lineHeight: 18,
-    paddingHorizontal: 16,
+  saveBtnText:     { fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#fff' },
+  editBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    borderWidth: 1, borderColor: AmbColors.outlineVariant,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: AmbColors.surface,
   },
+  editBtnActive: { borderColor: `${AmbColors.error}40`, backgroundColor: `${AmbColors.error}0D` },
+  securityNote:  { fontFamily: 'Inter_400Regular', fontSize: 11, color: AmbColors.outline, textAlign: 'center', paddingHorizontal: 16 },
 });
