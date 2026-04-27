@@ -1120,12 +1120,7 @@ export default function DoctorsScreen() {
               getDegreeName={getDegreeName}
               approvingId={approvingId}
               onApprove={() => handleApproveDoctor(item.id)}
-              onView={() =>
-                router.push({
-                  pathname: "/(hospital)/doctor-details/[id]",
-                  params: { id: item.id },
-                })
-              }
+              onView={() => router.push(`/doctor-details/${item.id}`)}
               onDelete={() => setDeleteTarget(item)}
             />
           )}

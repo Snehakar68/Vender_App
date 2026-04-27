@@ -444,6 +444,15 @@ const getDepartmentIcon = (name: string): string => {
   if (n.includes('oncol') || n.includes('cancer')) return 'biotech';
   if (n.includes('urol') || n.includes('kidney')) return 'water-drop';
   if (n.includes('general') || n.includes('medicine')) return 'local-hospital';
+  if (n.includes('ambulance') || n.includes('emergency') || n.includes('rescue')) return 'emergency';
+  if (n.includes('icu') || n.includes('intensive') || n.includes('critical')) return 'monitor-heart';
+  if (n.includes('pharma') || n.includes('dispensar')) return 'local-pharmacy';
+  if (n.includes('diagnos') || n.includes('pathol') || n.includes('lab')) return 'science';
+  if (n.includes('surg') || n.includes('operation') || n.includes('theatre')) return 'healing';
+  if (n.includes('blood') || n.includes('hemo') || n.includes('transfus')) return 'bloodtype';
+  if (n.includes('neonatal') || n.includes('nicu') || n.includes('newborn')) return 'child-care';
+  if (n.includes('trauma') || n.includes('accident')) return 'emergency';
+  if (n.includes('nutrition') || n.includes('diet')) return 'restaurant';
   return 'medical-services';
 };
 

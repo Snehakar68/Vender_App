@@ -826,12 +826,7 @@ export default function NursesScreen() {
               getDegreeName={getDegreeName}
               approvingId={approvingId}
               onApprove={() => handleApproveNurse(item.id)}
-              onView={() =>
-                router.push({
-                  pathname: "/(hospital)/nurse-details/[id]",
-                  params: { id: item.id },
-                })
-              }
+              onView={() => router.push(`/nurse-details/${item.id}`)}
               onDelete={() => setDeleteTarget(item)}
             />
           )}

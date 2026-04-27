@@ -130,6 +130,14 @@ export default function DoctorDetailsScreen() {
     );
   }
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(hospital)/doctors");
+    }
+  };
+
   const name = doctor.full_Name || doctor.full_name || "Unknown";
   const initials = name
     .split(" ")
@@ -144,10 +152,7 @@ export default function DoctorDetailsScreen() {
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       {/* App Bar */}
       <View style={styles.appBar}>
-        <TouchableOpacity
-          style={styles.appBarBtn}
-          onPress={() => router.back()}
-        >
+        <TouchableOpacity style={styles.appBarBtn} onPress={handleBack}>
           <MaterialIcons
             name="arrow-back"
             size={22}
@@ -186,7 +191,6 @@ export default function DoctorDetailsScreen() {
             <View style={styles.onlineDot} />
             <Text style={styles.onlineBadgeText}>Online</Text>
           </View>
-          {/* Chips */}
           <View style={styles.chipsRow}>
             <View
               style={[
@@ -197,9 +201,7 @@ export default function DoctorDetailsScreen() {
               <Text
                 style={[
                   styles.chipText,
-                  hasOnlineOPD
-                    ? styles.chipActiveText
-                    : styles.chipInactiveText,
+                  hasOnlineOPD ? styles.chipActiveText : styles.chipInactiveText,
                 ]}
               >
                 Online OPD: {hasOnlineOPD ? "Yes" : "No"}
@@ -214,9 +216,7 @@ export default function DoctorDetailsScreen() {
               <Text
                 style={[
                   styles.chipText,
-                  hasHomeVisit
-                    ? styles.chipActiveText
-                    : styles.chipInactiveText,
+                  hasHomeVisit ? styles.chipActiveText : styles.chipInactiveText,
                 ]}
               >
                 Home Visit: {hasHomeVisit ? "Yes" : "No"}
@@ -249,11 +249,7 @@ export default function DoctorDetailsScreen() {
         <SectionCard title="Personal Information" icon="person">
           <InfoRow label="Gender" value={val(doctor.gender)} />
           <InfoRow label="Date of Birth" value={val(doctor.dob)} />
-          <InfoRow
-            label="Blood Group"
-            value={val(doctor.blood_group)}
-            highlight
-          />
+          <InfoRow label="Blood Group" value={val(doctor.blood_group)} highlight />
           <InfoRow label="Mobile" value={val(doctor.mobile)} />
           <InfoRow label="Alt Mobile" value={val(doctor.alt_mobile)} />
           <InfoRow label="Email" value={val(doctor.email)} />
@@ -279,27 +275,17 @@ export default function DoctorDetailsScreen() {
           </View>
         </SectionCard>
 
-        {/* ── Professional Credentials (dark bg) ────────────────────────────── */}
+        {/* ── Professional Credentials ───────────────────────────────────────── */}
         <View style={styles.credentialsCard}>
           <View style={styles.credentialsHeader}>
-            <MaterialIcons
-              name="school"
-              size={20}
-              color={Colors.light.onPrimary}
-            />
-            <Text style={styles.credentialsTitle}>
-              Professional Credentials
-            </Text>
+            <MaterialIcons name="school" size={20} color={Colors.light.onPrimary} />
+            <Text style={styles.credentialsTitle}>Professional Credentials</Text>
           </View>
           <View style={styles.credentialsGrid}>
             <CredRow label="Degree" value={val(doctor.qualification)} />
             <CredRow
               label="Experience"
-              value={
-                val(doctor.experience) !== "—"
-                  ? `${doctor.experience} Years`
-                  : "—"
-              }
+              value={val(doctor.experience) !== "—" ? `${doctor.experience} Years` : "—"}
             />
             <CredRow label="Reg. Number" value={val(doctor.registration_no)} />
             <CredRow label="Reg. Date" value={val(doctor.registration_date)} />
@@ -307,9 +293,7 @@ export default function DoctorDetailsScreen() {
           {doctor.summary && (
             <View style={styles.credentialsSummary}>
               <Text style={styles.credentialsSummaryLabel}>Summary</Text>
-              <Text style={styles.credentialsSummaryText}>
-                {doctor.summary}
-              </Text>
+              <Text style={styles.credentialsSummaryText}>{doctor.summary}</Text>
             </View>
           )}
         </View>
@@ -318,69 +302,42 @@ export default function DoctorDetailsScreen() {
         <SectionCard title="Consultation Charges" icon="payments">
           <View style={styles.chargesRow}>
             <View style={styles.chargeCard}>
-              <MaterialIcons
-                name="computer"
-                size={20}
-                color={Colors.light.primary}
-              />
+              <MaterialIcons name="computer" size={20} color={Colors.light.primary} />
               <Text style={styles.chargeLabel}>Online Consult</Text>
               <Text style={styles.chargeAmount}>
-                {doctor.online_consult_fee !== undefined
-                  ? `₹${doctor.online_consult_fee}`
-                  : "—"}
+                {doctor.online_consult_fee !== undefined ? `₹${doctor.online_consult_fee}` : "—"}
               </Text>
             </View>
             <View style={styles.chargeCard}>
-              <MaterialIcons
-                name="home"
-                size={20}
-                color={Colors.light.primary}
-              />
+              <MaterialIcons name="home" size={20} color={Colors.light.primary} />
               <Text style={styles.chargeLabel}>Home Visit</Text>
               <Text style={styles.chargeAmount}>
-                {doctor.home_visit_fee !== undefined
-                  ? `₹${doctor.home_visit_fee}`
-                  : "—"}
+                {doctor.home_visit_fee !== undefined ? `₹${doctor.home_visit_fee}` : "—"}
               </Text>
             </View>
           </View>
         </SectionCard>
 
-        {/* ── Linked Hospitals / Work Details ───────────────────────────────── */}
+        {/* ── Linked Hospitals ──────────────────────────────────────────────── */}
         {(doctor.workDetails?.length ?? 0) > 0 && (
           <SectionCard title="Linked Hospitals" icon="local-hospital">
             {doctor.workDetails!.map((w, i) => (
               <View key={i} style={styles.workCard}>
                 <View style={styles.workCardTop}>
-                  <Text style={styles.workHospital}>
-                    {val(w.hospital_name)}
-                  </Text>
+                  <Text style={styles.workHospital}>{val(w.hospital_name)}</Text>
                   <View
-                    style={[
-                      styles.chip,
-                      w.is_approved === "Y"
-                        ? styles.chipApproved
-                        : styles.chipPending,
-                    ]}
+                    style={[styles.chip, w.is_approved === "Y" ? styles.chipApproved : styles.chipPending]}
                   >
                     <Text
-                      style={[
-                        styles.chipText,
-                        w.is_approved === "Y"
-                          ? styles.chipApprovedText
-                          : styles.chipPendingText,
-                      ]}
+                      style={[styles.chipText, w.is_approved === "Y" ? styles.chipApprovedText : styles.chipPendingText]}
                     >
                       {w.is_approved === "Y" ? "Approved" : "Pending"}
                     </Text>
                   </View>
                 </View>
                 <Text style={styles.workSchedule}>
-                  {val(w.work_days)}
-                  {"  "}
-                  {w.start_time && w.end_time
-                    ? `${w.start_time} – ${w.end_time}`
-                    : ""}
+                  {val(w.work_days)}{"  "}
+                  {w.start_time && w.end_time ? `${w.start_time} – ${w.end_time}` : ""}
                 </Text>
               </View>
             ))}
@@ -463,22 +420,9 @@ function CredRow({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.light.background },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: Spacing.sm,
-  },
-  loadingText: {
-    fontFamily: FontFamily.body,
-    fontSize: FontSize.bodyMedium,
-    color: Colors.light.onSurfaceVariant,
-  },
-  errorText: {
-    fontFamily: FontFamily.body,
-    fontSize: FontSize.bodyMedium,
-    color: Colors.light.error,
-  },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center", gap: Spacing.sm },
+  loadingText: { fontFamily: FontFamily.body, fontSize: FontSize.bodyMedium, color: Colors.light.onSurfaceVariant },
+  errorText: { fontFamily: FontFamily.body, fontSize: FontSize.bodyMedium, color: Colors.light.error },
   retryBtn: {
     marginTop: Spacing.sm,
     paddingHorizontal: Spacing.lg,
@@ -486,13 +430,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.primary,
     borderRadius: Radius.lg,
   },
-  retryText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: FontSize.bodyMedium,
-    color: Colors.light.onPrimary,
-  },
+  retryText: { fontFamily: FontFamily.bodyMedium, fontSize: FontSize.bodyMedium, color: Colors.light.onPrimary },
 
-  // App bar
   appBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -503,22 +442,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.outlineVariant,
   },
-  appBarBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  appBarTitle: {
-    fontFamily: FontFamily.headline,
-    fontSize: FontSize.titleLarge,
-    color: Colors.light.onSurface,
-  },
+  appBarBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  appBarTitle: { fontFamily: FontFamily.headline, fontSize: FontSize.titleLarge, color: Colors.light.onSurface },
 
   content: { paddingBottom: Spacing.xl },
 
-  // Profile header card
   profileCard: {
     alignItems: "center",
     backgroundColor: Colors.light.surface,
@@ -529,66 +457,23 @@ const styles = StyleSheet.create({
     ...Shadow.subtle,
   },
   profileAvatar: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 96, height: 96, borderRadius: 48,
     backgroundColor: Colors.light.primaryFixed,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 4,
-    borderColor: Colors.light.primary + "40",
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 4, borderColor: Colors.light.primary + "40",
   },
-  profileAvatarText: {
-    fontFamily: FontFamily.headline,
-    fontSize: 32,
-    color: Colors.light.primary,
-  },
-  profileImage: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 4,
-    borderColor: Colors.light.primary + "40",
-  },
-  profileName: {
-    fontFamily: FontFamily.headline,
-    fontSize: FontSize.headlineMedium,
-    color: Colors.light.onSurface,
-  },
+  profileAvatarText: { fontFamily: FontFamily.headline, fontSize: 32, color: Colors.light.primary },
+  profileImage: { width: 96, height: 96, borderRadius: 48, borderWidth: 4, borderColor: Colors.light.primary + "40" },
+  profileName: { fontFamily: FontFamily.headline, fontSize: FontSize.headlineMedium, color: Colors.light.onSurface },
   onlineBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    backgroundColor: Colors.light.tertiaryFixed + "50",
-    borderRadius: Radius.full,
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 12, paddingVertical: 4,
+    backgroundColor: Colors.light.tertiaryFixed + "50", borderRadius: Radius.full,
   },
-  onlineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.light.tertiary,
-  },
-  onlineBadgeText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: FontSize.labelLarge,
-    color: Colors.light.tertiary,
-  },
-  chipsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.xs,
-    justifyContent: "center",
-  },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.full,
-  },
+  onlineDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.light.tertiary },
+  onlineBadgeText: { fontFamily: FontFamily.bodyMedium, fontSize: FontSize.labelLarge, color: Colors.light.tertiary },
+  chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.xs, justifyContent: "center" },
+  chip: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radius.full },
   chipActive: { backgroundColor: Colors.light.tertiaryFixed + "50" },
   chipInactive: { backgroundColor: Colors.light.surfaceContainerHigh },
   chipApproved: { backgroundColor: Colors.light.tertiaryFixed + "50" },
@@ -599,160 +484,60 @@ const styles = StyleSheet.create({
   chipApprovedText: { color: Colors.light.tertiary },
   chipPendingText: { color: Colors.light.error },
 
-  // Section card
   sectionCard: {
-    marginHorizontal: Spacing.md,
-    marginTop: Spacing.md,
-    backgroundColor: Colors.light.surface,
-    borderRadius: Radius.xl,
-    padding: Spacing.md,
-    gap: Spacing.sm,
-    ...Shadow.subtle,
+    marginHorizontal: Spacing.md, marginTop: Spacing.md,
+    backgroundColor: Colors.light.surface, borderRadius: Radius.xl,
+    padding: Spacing.md, gap: Spacing.sm, ...Shadow.subtle,
   },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.xs,
-    marginBottom: 4,
-  },
-  sectionTitle: {
-    fontFamily: FontFamily.headline,
-    fontSize: FontSize.titleSmall,
-    color: Colors.light.onSurface,
-  },
+  sectionHeader: { flexDirection: "row", alignItems: "center", gap: Spacing.xs, marginBottom: 4 },
+  sectionTitle: { fontFamily: FontFamily.headline, fontSize: FontSize.titleSmall, color: Colors.light.onSurface },
 
-  // Info row
   infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.outlineVariant + "60",
+    flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start",
+    paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: Colors.light.outlineVariant + "60",
   },
-  infoLabel: {
-    fontFamily: FontFamily.body,
-    fontSize: FontSize.bodySmall,
-    color: Colors.light.onSurfaceVariant,
-    flex: 1,
-  },
-  infoValue: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: FontSize.bodySmall,
-    color: Colors.light.onSurface,
-    flex: 1,
-    textAlign: "right",
-  },
-  infoValueHighlight: {
-    color: Colors.light.error,
-    fontFamily: FontFamily.bodySemiBold,
-  },
+  infoLabel: { fontFamily: FontFamily.body, fontSize: FontSize.bodySmall, color: Colors.light.onSurfaceVariant, flex: 1 },
+  infoValue: { fontFamily: FontFamily.bodyMedium, fontSize: FontSize.bodySmall, color: Colors.light.onSurface, flex: 1, textAlign: "right" },
+  infoValueHighlight: { color: Colors.light.error, fontFamily: FontFamily.bodySemiBold },
 
-  // Grid row for city/state/pin
   gridRow: { flexDirection: "row", gap: Spacing.sm, marginTop: Spacing.xs },
   gridCell: { flex: 1, gap: 2 },
 
-  // Credentials card (dark)
   credentialsCard: {
-    marginHorizontal: Spacing.md,
-    marginTop: Spacing.md,
-    backgroundColor: Colors.light.primary,
-    borderRadius: Radius.xl,
-    padding: Spacing.md,
-    gap: Spacing.sm,
+    marginHorizontal: Spacing.md, marginTop: Spacing.md,
+    backgroundColor: Colors.light.primary, borderRadius: Radius.xl,
+    padding: Spacing.md, gap: Spacing.sm,
   },
-  credentialsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.xs,
-    marginBottom: 4,
-  },
-  credentialsTitle: {
-    fontFamily: FontFamily.headline,
-    fontSize: FontSize.titleSmall,
-    color: Colors.light.onPrimary,
-  },
+  credentialsHeader: { flexDirection: "row", alignItems: "center", gap: Spacing.xs, marginBottom: 4 },
+  credentialsTitle: { fontFamily: FontFamily.headline, fontSize: FontSize.titleSmall, color: Colors.light.onPrimary },
   credentialsGrid: { gap: 6 },
   credRow: { flexDirection: "row", justifyContent: "space-between" },
-  credLabel: {
-    fontFamily: FontFamily.body,
-    fontSize: FontSize.bodySmall,
-    color: Colors.light.onPrimary + "CC",
-  },
-  credValue: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: FontSize.bodySmall,
-    color: Colors.light.onPrimary,
-  },
+  credLabel: { fontFamily: FontFamily.body, fontSize: FontSize.bodySmall, color: Colors.light.onPrimary + "CC" },
+  credValue: { fontFamily: FontFamily.bodyMedium, fontSize: FontSize.bodySmall, color: Colors.light.onPrimary },
   credentialsSummary: {
-    marginTop: Spacing.xs,
-    padding: Spacing.sm,
-    backgroundColor: "rgba(255,255,255,0.12)",
-    borderRadius: Radius.lg,
+    marginTop: Spacing.xs, padding: Spacing.sm,
+    backgroundColor: "rgba(255,255,255,0.12)", borderRadius: Radius.lg,
   },
-  credentialsSummaryLabel: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: FontSize.labelSmall,
-    color: Colors.light.onPrimary + "CC",
-    marginBottom: 4,
-  },
-  credentialsSummaryText: {
-    fontFamily: FontFamily.body,
-    fontSize: FontSize.bodySmall,
-    color: Colors.light.onPrimary,
-  },
+  credentialsSummaryLabel: { fontFamily: FontFamily.bodyMedium, fontSize: FontSize.labelSmall, color: Colors.light.onPrimary + "CC", marginBottom: 4 },
+  credentialsSummaryText: { fontFamily: FontFamily.body, fontSize: FontSize.bodySmall, color: Colors.light.onPrimary },
 
-  // Charges
   chargesRow: { flexDirection: "row", gap: Spacing.sm },
   chargeCard: {
-    flex: 1,
-    alignItems: "center",
-    gap: 6,
+    flex: 1, alignItems: "center", gap: 6,
     backgroundColor: Colors.light.primaryFixed + "50",
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
+    borderRadius: Radius.lg, padding: Spacing.md,
   },
-  chargeLabel: {
-    fontFamily: FontFamily.body,
-    fontSize: FontSize.labelMedium,
-    color: Colors.light.onSurfaceVariant,
-  },
-  chargeAmount: {
-    fontFamily: FontFamily.headline,
-    fontSize: FontSize.headlineSmall,
-    color: Colors.light.primary,
-  },
+  chargeLabel: { fontFamily: FontFamily.body, fontSize: FontSize.labelMedium, color: Colors.light.onSurfaceVariant },
+  chargeAmount: { fontFamily: FontFamily.headline, fontSize: FontSize.headlineSmall, color: Colors.light.primary },
 
-  // Work details
   workCard: {
-    padding: Spacing.sm,
-    borderRadius: Radius.lg,
+    padding: Spacing.sm, borderRadius: Radius.lg,
     backgroundColor: Colors.light.surfaceContainerLow,
-    marginBottom: Spacing.xs,
-    gap: 4,
+    marginBottom: Spacing.xs, gap: 4,
   },
-  workCardTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  workHospital: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: FontSize.bodyMedium,
-    color: Colors.light.onSurface,
-    flex: 1,
-  },
-  workSchedule: {
-    fontFamily: FontFamily.body,
-    fontSize: FontSize.bodySmall,
-    color: Colors.light.onSurfaceVariant,
-  },
+  workCardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  workHospital: { fontFamily: FontFamily.bodyMedium, fontSize: FontSize.bodyMedium, color: Colors.light.onSurface, flex: 1 },
+  workSchedule: { fontFamily: FontFamily.body, fontSize: FontSize.bodySmall, color: Colors.light.onSurfaceVariant },
 
-  // Bank
-  bankDivider: {
-    marginTop: Spacing.md,
-    paddingTop: Spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: Colors.light.outlineVariant,
-  },
+  bankDivider: { marginTop: Spacing.md, paddingTop: Spacing.md, borderTopWidth: 1, borderTopColor: Colors.light.outlineVariant },
 });

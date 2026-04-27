@@ -110,6 +110,14 @@ export default function NurseDetailsScreen() {
     );
   }
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(hospital)/nurses');
+    }
+  };
+
   const name = nurse.full_Name || nurse.full_name || 'Unknown';
   const initials = name.split(' ').slice(0, 2).map((w) => w[0]?.toUpperCase() || '').join('');
   const photo = nurse.nurseIMG?.[0]?.photo;
@@ -121,7 +129,7 @@ export default function NurseDetailsScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       {/* App Bar */}
       <View style={styles.appBar}>
-        <TouchableOpacity style={styles.appBarBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.appBarBtn} onPress={handleBack}>
           <MaterialIcons name="arrow-back" size={22} color={Colors.light.onSurface} />
         </TouchableOpacity>
         <Text style={styles.appBarTitle}>Nurse Profile</Text>
@@ -247,7 +255,7 @@ export default function NurseDetailsScreen() {
           </SectionCard>
         )}
 
-        {/* ── Bank Details (dark bg) ─────────────────────────────────────────── */}
+        {/* ── Bank Details ──────────────────────────────────────────────────── */}
         {bank && (
           <View style={[styles.credentialsCard, { marginBottom: 0 }]}>
             <View style={styles.credentialsHeader}>
@@ -322,7 +330,6 @@ const styles = StyleSheet.create({
   },
   retryText: { fontFamily: FontFamily.bodyMedium, fontSize: FontSize.bodyMedium, color: Colors.light.onPrimary },
 
-  // App bar
   appBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: Spacing.sm, paddingVertical: Spacing.sm,
@@ -334,7 +341,6 @@ const styles = StyleSheet.create({
 
   content: { paddingBottom: Spacing.xl },
 
-  // Profile header
   profileCard: {
     alignItems: 'center', backgroundColor: Colors.light.surface,
     paddingTop: Spacing.lg + Spacing.sm, paddingBottom: Spacing.lg,
@@ -359,7 +365,6 @@ const styles = StyleSheet.create({
   metaText: { fontFamily: FontFamily.body, fontSize: FontSize.bodySmall, color: Colors.light.onSurfaceVariant },
   metaDot: { color: Colors.light.onSurfaceVariant, fontSize: 14 },
 
-  // Chips
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radius.full,
@@ -370,7 +375,6 @@ const styles = StyleSheet.create({
   chipApprovedText: { color: Colors.light.tertiary },
   chipPendingText: { color: Colors.light.error },
 
-  // Section card
   sectionCard: {
     marginHorizontal: Spacing.md, marginTop: Spacing.md,
     backgroundColor: Colors.light.surface, borderRadius: Radius.xl,
@@ -379,7 +383,6 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, marginBottom: 4 },
   sectionTitle: { fontFamily: FontFamily.headline, fontSize: FontSize.titleSmall, color: Colors.light.onSurface },
 
-  // Info row
   infoRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: Colors.light.outlineVariant + '60',
@@ -388,11 +391,9 @@ const styles = StyleSheet.create({
   infoValue: { fontFamily: FontFamily.bodyMedium, fontSize: FontSize.bodySmall, color: Colors.light.onSurface, flex: 1, textAlign: 'right' },
   infoValueHighlight: { color: Colors.light.error, fontFamily: FontFamily.bodySemiBold },
 
-  // Grid
   gridRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.xs },
   gridCell: { flex: 1, gap: 2 },
 
-  // Credentials card (dark)
   credentialsCard: {
     marginHorizontal: Spacing.md, marginTop: Spacing.md,
     backgroundColor: Colors.light.primary, borderRadius: Radius.xl,

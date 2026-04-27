@@ -1,1129 +1,3 @@
-// import React, { useState, useEffect, useContext } from "react";
-// import {
-//   View,
-//   Text,
-//   StyleSheet,
-//   ScrollView,
-//   TextInput,
-//   TouchableOpacity,
-//   KeyboardAvoidingView,
-//   Platform,
-//   Image,
-//   ActivityIndicator,
-//   Alert,
-//   Linking,
-//   Switch,
-//   Modal,
-//   Dimensions,
-// } from "react-native";
-// import { SafeAreaView } from "react-native-safe-area-context";
-// import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-// import { router } from "expo-router";
-// import * as ImagePicker from "expo-image-picker";
-// import * as DocumentPicker from "expo-document-picker";
-// import * as FileSystem from 'expo-file-system/legacy';
-// import * as ImageManipulator from 'expo-image-manipulator';
-// import DateTimePicker from "@react-native-community/datetimepicker";
-// import {
-//   AmbColors,
-//   AmbRadius,
-//   AmbShadow,
-// } from "@/src/features/ambulance/constants/ambulanceTheme";
-// import TransactionalHeader from "@/src/features/ambulance/components/TransactionalHeader";
-// import { AuthContext } from "@/src/core/context/AuthContext";
-// import { GoogleMapApiKey } from "@/src/utils/Apis";
-// import {
-//   Colors,
-//   FontFamily,
-//   FontSize,
-//   Spacing,
-//   Radius,
-//   Shadow,
-//   ButtonSize,
-// } from "@/src/shared/constants/theme";
-
-// const BASE_URL = "https://coreapi-service-111763741518.asia-south1.run.app";
-
-// const GENDER_OPTIONS = [
-//   { label: "Male", value: "M" },
-//   { label: "Female", value: "F" },
-//   { label: "Other", value: "O" },
-// ];
-
-// const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
-
-// const DEFAULT_FORM = {
-//   name: "",
-//   gender: "",
-//   dob: "",
-//   email: "",
-//   phone: "",
-//   altPhone: "",
-//   bloodGroup: "",
-//   addr1: "",
-//   addr2: "",
-//   city: "",
-//   state: "",
-//   pin: "",
-//   adhaarNo: "",
-//   panNo: "",
-// };
-
-// // ✅ FIX 1: Safe base64 → temp file writer with null-guard and string encoding
-// async function base64ToTempUri(base64: string, filename: string): Promise<string> {
-//   const cacheDir = FileSystem.cacheDirectory;
-//   if (!cacheDir) throw new Error("Cache directory unavailable on this device.");
-//   const uri = cacheDir + filename;
-//   await FileSystem.writeAsStringAsync(uri, base64, {
-//     encoding: "base64" as any, // ✅ avoids FileSystem.EncodingType.Base64 enum crash
-//   });
-//   return uri;
-// }
-
-// function InputField({
-//   label, field, placeholder, keyboardType, maxLength, autoCapitalize, required,
-//   isEditing, value, onChangeText, error,
-// }: {
-//   label: string; field: string; placeholder?: string;
-//   keyboardType?: any; maxLength?: number; autoCapitalize?: any; required?: boolean;
-//   isEditing: boolean; value: string; onChangeText: (v: string) => void; error?: string;
-// }) {
-//   return (
-//     <View style={styles.fieldGroup}>
-//       <Text style={styles.fieldLabel}>
-//         {label}{required && <Text style={styles.required}> *</Text>}
-//       </Text>
-//       <View style={[styles.inputWrapper, !isEditing && styles.inputDisabled]}>
-//         <TextInput
-//           style={styles.textInput}
-//           placeholder={placeholder || label}
-//           placeholderTextColor={`${AmbColors.outline}70`}
-//           value={value}
-//           onChangeText={onChangeText}
-//           editable={isEditing}
-//           keyboardType={keyboardType || "default"}
-//           maxLength={maxLength}
-//           autoCapitalize={autoCapitalize || "sentences"}
-//         />
-//       </View>
-//       {error ? <Text style={styles.errorText}>{error}</Text> : null}
-//     </View>
-//   );
-// }
-
-// export default function PersonalInformationScreen() {
-//   const auth = useContext(AuthContext);
-//   const vendorId = auth?.user?.vendorId ?? "";
-
-//   const [form, setForm] = useState(DEFAULT_FORM);
-//   const [backupForm, setBackupForm] = useState(DEFAULT_FORM);
-
-//   const [photoUri, setPhotoUri] = useState<string | null>(null);
-//   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
-//   const [panUri, setPanUri] = useState<string | null>(null);
-//   const [panBase64, setPanBase64] = useState<string | null>(null);
-//   const [panIsPdf, setPanIsPdf] = useState(false);
-//   const [panMimeType, setPanMimeType] = useState<string | null>(null);
-//   const [panName, setPanName] = useState<string | null>(null);
-//   const [adhaarUri, setAdhaarUri] = useState<string | null>(null);
-//   const [adhaarBase64, setAdhaarBase64] = useState<string | null>(null);
-//   const [adhaarIsPdf, setAdhaarIsPdf] = useState(false);
-//   const [adhaarMimeType, setAdhaarMimeType] = useState<string | null>(null);
-//   const [adhaarName, setAdhaarName] = useState<string | null>(null);
-//   const [viewingImageUri, setViewingImageUri] = useState<string | null>(null);
-
-//   const [isEditing, setIsEditing] = useState(false);
-//   const [loading, setLoading] = useState(true);
-//   const [saving, setSaving] = useState(false);
-//   const [errors, setErrors] = useState<Record<string, string>>({});
-//   const [successMsg, setSuccessMsg] = useState("");
-//   const [showDobPicker, setShowDobPicker] = useState(false);
-//   const [cityQuery, setCityQuery] = useState("");
-//   const [cityResults, setCityResults] = useState<any[]>([]);
-//   const [citySelected, setCitySelected] = useState(false);
-
-//   useEffect(() => {
-//     setCityQuery(form.city);
-//   }, [form.city]);
-
-//   useEffect(() => {
-//     if (citySelected) return;
-//     if (!isEditing) return;
-//     if (cityQuery.length < 2) {
-//       setCityResults([]);
-//       return;
-//     }
-//     const timer = setTimeout(async () => {
-//       try {
-//         const res = await fetch(
-//           `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
-//             cityQuery,
-//           )}&types=(cities)&components=country:in&key=${GoogleMapApiKey}`,
-//         );
-//         const data = await res.json();
-//         setCityResults(data.predictions || []);
-//       } catch (err) {
-//         console.log("Autocomplete error:", err);
-//       }
-//     }, 400);
-//     return () => clearTimeout(timer);
-//   }, [cityQuery, isEditing, citySelected]);
-
-//   const fetchPlaceDetails = async (placeId: string) => {
-//     setCitySelected(true);
-//     setCityResults([]);
-//     try {
-//       const res = await fetch(
-//         `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${GoogleMapApiKey}&fields=address_component`,
-//       );
-//       const data = await res.json();
-//       const details = data.result;
-//       let city = "";
-//       let state = "";
-//       let pin = "";
-//       details.address_components.forEach((comp: any) => {
-//         const types = comp.types;
-//         if (types.includes("locality")) city = comp.long_name;
-//         if (!city && types.includes("administrative_area_level_2")) city = comp.long_name;
-//         if (types.includes("administrative_area_level_1")) state = comp.long_name;
-//         if (types.includes("postal_code")) pin = comp.long_name;
-//       });
-//       setCityQuery(city);
-//       setForm((prev) => ({ ...prev, city, state, ...(pin ? { pin } : {}) }));
-//       setErrors((prev) => {
-//         const copy = { ...prev };
-//         delete copy.city;
-//         delete copy.state;
-//         if (pin?.length === 6) delete copy.pin;
-//         return copy;
-//       });
-//     } catch (err) {
-//       console.log("Place details error:", err);
-//     }
-//   };
-
-//   useEffect(() => {
-//     if (!vendorId) { setLoading(false); return; }
-//     fetch(`${BASE_URL}/api/Ambulance/GetAmbulance_Owner_ById/${vendorId}`)
-//       .then((r) => r.json())
-//       .then((data) => {
-//         const d = data || {};
-//         const isPdfB64 = (b64 = "") => b64.startsWith("JVBER");
-//         const docs = d.ambulanceDocs ?? {};
-//         const mapped = {
-//           name: d.full_Name ?? "",
-//           gender: d.gender ?? "",
-//           dob: d.dob?.split("T")[0] ?? "",
-//           email: d.email ?? "",
-//           phone: d.mobile ?? "",
-//           altPhone: d.mobile_1 ?? "",
-//           bloodGroup: d.bloodG ?? "",
-//           addr1: d.adrs_1 ?? "",
-//           addr2: d.adrs_2 ?? "",
-//           city: d.city ?? "",
-//           state: d.state ?? "",
-//           pin: d.pin_code ?? "",
-//           adhaarNo: d.adhaarNo ?? "",
-//           panNo: d.panNo ?? "",
-//         };
-//         setForm(mapped);
-//         setBackupForm(mapped);
-//         setCityQuery(mapped.city);
-//         if (docs.photo) setPhotoBase64(docs.photo);
-//         if (docs.pan) {
-//           if (isPdfB64(docs.pan)) { setPanIsPdf(true); setPanBase64(docs.pan); }
-//           else setPanBase64(docs.pan);
-//         }
-//         if (docs.adhaar) {
-//           if (isPdfB64(docs.adhaar)) { setAdhaarIsPdf(true); setAdhaarBase64(docs.adhaar); }
-//           else setAdhaarBase64(docs.adhaar);
-//         }
-//       })
-//       .catch((e) => console.error("Fetch personal info:", e))
-//       .finally(() => setLoading(false));
-//   }, [vendorId]);
-
-//   useEffect(() => {
-//     if (!successMsg) return;
-//     const t = setTimeout(() => setSuccessMsg(""), 4000);
-//     return () => clearTimeout(t);
-//   }, [successMsg]);
-
-//   const setField = (key: keyof typeof DEFAULT_FORM, value: string) => {
-//     setForm((prev) => ({ ...prev, [key]: value }));
-//     if (errors[key]) setErrors((prev) => { const n = { ...prev }; delete n[key]; return n; });
-//   };
-
-//   const handleEditToggle = () => {
-//     if (isEditing) {
-//       // Cancel edit mode
-//       setForm(backupForm);
-//       setCityQuery(backupForm.city); // Reset query to saved value
-//       setCitySelected(true); // Mark as not-user-modified to prevent auto-search
-//       setErrors({});
-//       setSuccessMsg("");
-//       setCityResults([]);
-//       setIsEditing(false);
-//     } else {
-//       // Enter edit mode
-//       setCitySelected(true); // SET THIS FIRST - guard prevents auto-search on edit mode enter
-//       setBackupForm(form);
-//       setErrors({});
-//       setSuccessMsg("");
-//       setCityQuery(backupForm.city);
-//       setCityResults([]);
-//       setIsEditing(true);
-//     }
-//   };
-
-//   const pickPhoto = async () => {
-//     try {
-//       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-//       if (status !== "granted") {
-//         Alert.alert("Permission needed", "Gallery permission is required to select a photo");
-//         return;
-//       }
-//       const result = await ImagePicker.launchImageLibraryAsync({
-//         mediaTypes: ["images"],
-//         allowsEditing: true,
-//         aspect: [1, 1],
-//         quality: 0.8,
-//       });
-//       if (!result.canceled) {
-//         const uri = result.assets[0].uri;
-//         const info = await FileSystem.getInfoAsync(uri);
-//         if ((info as any).size > 204800) {
-//           Alert.alert("File too large", "Only 200KB size allowed");
-//           return;
-//         }
-//         setPhotoUri(uri);
-//         setPhotoBase64(null);
-//       }
-//     } catch {
-//       Alert.alert("Error", "Could not open gallery");
-//     }
-//   };
-
-//   const compressPhoto = async (uri: string): Promise<string> => {
-//     try {
-//       const info = await FileSystem.getInfoAsync(uri);
-//       if ((info as any).size <= 204800) return uri;
-//       let result = await ImageManipulator.manipulateAsync(
-//         uri,
-//         [{ resize: { width: 800 } }],
-//         { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG },
-//       );
-//       const info2 = await FileSystem.getInfoAsync(result.uri);
-//       if ((info2 as any).size <= 204800) return result.uri;
-//       result = await ImageManipulator.manipulateAsync(
-//         uri,
-//         [{ resize: { width: 600 } }],
-//         { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG },
-//       );
-//       return result.uri;
-//     } catch {
-//       return uri;
-//     }
-//   };
-
-//   const pickPhotoFromCamera = async () => {
-//     try {
-//       const { status } = await ImagePicker.requestCameraPermissionsAsync();
-//       if (status !== "granted") {
-//         Alert.alert("Permission needed", "Camera permission is required to take a photo");
-//         return;
-//       }
-//       const result = await ImagePicker.launchCameraAsync({
-//         allowsEditing: true,
-//         aspect: [1, 1],
-//         quality: 0.8,
-//       });
-//       if (!result.canceled) {
-//         const compressed = await compressPhoto(result.assets[0].uri);
-//         const info = await FileSystem.getInfoAsync(compressed);
-//         if ((info as any).size > 204800) {
-//           Alert.alert("File too large", "Only 200KB size allowed");
-//           return;
-//         }
-//         setPhotoUri(compressed);
-//         setPhotoBase64(null);
-//       }
-//     } catch {
-//       Alert.alert("Error", "Could not open camera");
-//     }
-//   };
-
-//   const handlePhotoPress = () => {
-//     if (!isEditing) return;
-//     Alert.alert("Profile Photo", "Choose source", [
-//       { text: "Camera", onPress: pickPhotoFromCamera },
-//       { text: "Gallery", onPress: pickPhoto },
-//       { text: "Cancel", style: "cancel" },
-//     ]);
-//   };
-
-//   const pickPanDoc = async () => {
-//     const result = await DocumentPicker.getDocumentAsync({
-//       type: ["image/*", "application/pdf"],
-//       copyToCacheDirectory: true,
-//     });
-//     if (result.canceled) return;
-//     const file = result.assets[0];
-//     if (file.size && file.size > 204800) {
-//       setErrors(prev => ({ ...prev, pan: "File must be under 200KB" }));
-//       return;
-//     }
-//     const isPdf = file.mimeType === "application/pdf";
-//     setPanUri(file.uri);
-//     setPanBase64(null);
-//     setPanIsPdf(isPdf);
-//     setPanMimeType(file.mimeType ?? "image/jpeg");
-//     setPanName(file.name);
-//   };
-
-//   const pickAdhaarDoc = async () => {
-//     const result = await DocumentPicker.getDocumentAsync({
-//       type: ["image/*", "application/pdf"],
-//       copyToCacheDirectory: true,
-//     });
-//     if (result.canceled) return;
-//     const file = result.assets[0];
-//     if (file.size && file.size > 204800) {
-//       setErrors(prev => ({ ...prev, adhaar: "File must be under 200KB" }));
-//       return;
-//     }
-//     const isPdf = file.mimeType === "application/pdf";
-//     setAdhaarUri(file.uri);
-//     setAdhaarBase64(null);
-//     setAdhaarIsPdf(isPdf);
-//     setAdhaarMimeType(file.mimeType ?? "image/jpeg");
-//     setAdhaarName(file.name);
-//   };
-
-//   const viewAdhaarDoc = async () => {
-//     if (adhaarUri) {
-//       if (adhaarIsPdf) {
-//         try {
-//           const uri = Platform.OS === "android"
-//             ? await FileSystem.getContentUriAsync(adhaarUri)
-//             : adhaarUri;
-//           await Linking.openURL(uri);
-//         } catch {
-//           Alert.alert("Error", "Could not open document");
-//         }
-//       } else {
-//         setViewingImageUri(adhaarUri);
-//       }
-//     } else if (adhaarBase64) {
-//       if (adhaarIsPdf) {
-//         try {
-//           const tmpUri = await base64ToTempUri(adhaarBase64, "adhaar_doc.pdf");
-//           const uri = Platform.OS === "android"
-//             ? await FileSystem.getContentUriAsync(tmpUri)
-//             : tmpUri;
-//           await Linking.openURL(uri);
-//         } catch {
-//           Alert.alert("Error", "Could not open document");
-//         }
-//       } else {
-//         setViewingImageUri(`data:image/jpeg;base64,${adhaarBase64}`);
-//       }
-//     }
-//   };
-
-//   const viewPanDoc = async () => {
-//     if (panUri) {
-//       if (panIsPdf) {
-//         try {
-//           const uri = Platform.OS === "android"
-//             ? await FileSystem.getContentUriAsync(panUri)
-//             : panUri;
-//           await Linking.openURL(uri);
-//         } catch {
-//           Alert.alert("Error", "Could not open document");
-//         }
-//       } else {
-//         setViewingImageUri(panUri);
-//       }
-//     } else if (panBase64) {
-//       if (panIsPdf) {
-//         try {
-//           const tmpUri = await base64ToTempUri(panBase64, "pan_doc.pdf");
-//           const uri = Platform.OS === "android"
-//             ? await FileSystem.getContentUriAsync(tmpUri)
-//             : tmpUri;
-//           await Linking.openURL(uri);
-//         } catch {
-//           Alert.alert("Error", "Could not open document");
-//         }
-//       } else {
-//         setViewingImageUri(`data:image/jpeg;base64,${panBase64}`);
-//       }
-//     }
-//   };
-
-//   const handleDobChange = (_: any, date?: Date) => {
-//     setShowDobPicker(false);
-//     if (date) setField("dob", date.toISOString().split("T")[0]);
-//   };
-
-//   const validate = (): boolean => {
-//     const err: Record<string, string> = {};
-//     if (!form.name.trim()) err.name = "Full Name is required";
-//     else if (!/^[A-Za-z\s]+$/.test(form.name)) err.name = "Only alphabets allowed";
-//     if (!form.gender) err.gender = "Gender is required";
-//     if (!form.dob) err.dob = "Date of Birth is required";
-//     if (!form.email) err.email = "Email is required";
-//     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) err.email = "Invalid email format";
-//     if (!form.phone) err.phone = "Phone number is required";
-//     else if (!/^\d{10}$/.test(form.phone)) err.phone = "Phone must be 10 digits";
-//     if (form.altPhone && !/^\d{10}$/.test(form.altPhone)) err.altPhone = "Alt phone must be 10 digits";
-//     if (!form.addr1.trim()) err.addr1 = "Address Line 1 is required";
-//     if (!form.city.trim()) err.city = "City is required";
-//     if (!form.state.trim()) err.state = "State is required";
-//     if (!form.pin) err.pin = "PIN code is required";
-//     else if (!/^\d{6}$/.test(form.pin)) err.pin = "PIN must be 6 digits";
-//     if (!form.adhaarNo) err.adhaarNo = "Aadhaar number required";
-//     else if (!/^\d{12}$/.test(form.adhaarNo)) err.adhaarNo = "Aadhaar must be 12 digits";
-//     if (!form.panNo) err.panNo = "PAN number required";
-//     else if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(form.panNo)) err.panNo = "Invalid PAN format (e.g. ABCDE1234F)";
-//     if (!photoUri && !photoBase64) err.photo = "Profile photo is required";
-//     setErrors(err);
-//     return Object.keys(err).length === 0;
-//   };
-
-//   const handleSubmit = async () => {
-//     if (!validate()) return;
-//     if (!vendorId) {
-//       Alert.alert("Error", "Vendor ID not found. Please log in again.");
-//       return;
-//     }
-//     setSaving(true);
-//     try {
-//       const fd = new FormData();
-//       fd.append("vendor_id", vendorId);
-//       fd.append("full_name", form.name.trim());
-//       fd.append("Gender", form.gender);
-//       fd.append("dob", form.dob);
-//       fd.append("email", form.email.trim());
-//       fd.append("mobile", form.phone);
-//       fd.append("mobile_1", form.altPhone || form.phone);
-//       fd.append("BloodG", form.bloodGroup || "O+");
-//       fd.append("adrs_1", form.addr1.trim());
-//       fd.append("adrs_2", form.addr2.trim() || "NA");
-//       fd.append("City", form.city.trim());
-//       fd.append("State", form.state.trim());
-//       fd.append("pin_code", form.pin);
-//       fd.append("adhaarNo", form.adhaarNo);
-//       fd.append("panNo", form.panNo);
-
-//       // ✅ FIX 3: For base64 images from API, write to temp file safely
-//       // Photo
-//       // if (photoUri) {
-//       //   fd.append("photo", { uri: photoUri, name: "photo.jpg", type: "image/jpeg" } as any);
-//       // } else if (photoBase64) {
-//       //   const tmpUri = await base64ToTempUri(photoBase64, "photo.jpg");
-//       //   fd.append("photo", { uri: tmpUri, name: "photo.jpg", type: "image/jpeg" } as any);
-//       // }
-
-//       // // Aadhaar doc
-//       // if (adhaarUri) {
-//       //   fd.append("adhaar", { uri: adhaarUri, name: "adhaar.jpg", type: "image/jpeg" } as any);
-//       // } else if (adhaarBase64) {
-//       //   const tmpUri = await base64ToTempUri(adhaarBase64, "adhaar.jpg");
-//       //   fd.append("adhaar", { uri: tmpUri, name: "adhaar.jpg", type: "image/jpeg" } as any);
-//       // }
-
-//       // // PAN doc
-//       // if (panUri) {
-//       //   fd.append("pan", { uri: panUri, name: "pan.jpg", type: "image/jpeg" } as any);
-//       // } else if (panBase64) {
-//       //   const tmpUri = await base64ToTempUri(panBase64, "pan.jpg");
-//       //   fd.append("pan", { uri: tmpUri, name: "pan.jpg", type: "image/jpeg" } as any);
-//       // }
-//       // Photo
-// if (photoUri) {
-//   fd.append("photo", { uri: photoUri, name: "photo.jpg", type: "image/jpeg" } as any);
-// }
-
-// // Aadhaar doc
-// if (adhaarUri) {
-//   const adhaarExt = adhaarMimeType === "application/pdf" ? "pdf" : "jpg";
-//   fd.append("adhaar", { uri: adhaarUri, name: adhaarName ?? `adhaar.${adhaarExt}`, type: adhaarMimeType ?? "image/jpeg" } as any);
-// }
-
-// // PAN doc
-// if (panUri) {
-//   const panExt = panMimeType === "application/pdf" ? "pdf" : "jpg";
-//   fd.append("pan", { uri: panUri, name: panName ?? `pan.${panExt}`, type: panMimeType ?? "image/jpeg" } as any);
-// }
-
-//       const res = await fetch(
-//         `${BASE_URL}/api/Ambulance/UpdateAmbulance_Owner_Info`,
-//         { method: "POST", body: fd },
-//       );
-//       const text = await res.text();
-//       let data: any;
-//       try { data = JSON.parse(text); } catch { data = { message: text }; }
-//       if (!res.ok) throw new Error(data?.error || data?.message || "Update failed");
-
-//       setSuccessMsg(data?.message || "Personal information updated successfully");
-//       setBackupForm(form);
-//       setIsEditing(false);
-//     } catch (e: any) {
-//       console.error("Update error:", e);
-//       Alert.alert("Update Failed", e.message || "Something went wrong. Please try again.");
-//     } finally {
-//       setSaving(false);
-//     }
-//   };
-
-//   const photoSource = photoUri
-//     ? { uri: photoUri }
-//     : photoBase64
-//       ? { uri: `data:image/jpeg;base64,${photoBase64}` }
-//       : null;
-
-//   const initials = form.name.trim()
-//     ? form.name.trim().split(" ").filter(Boolean).map((w) => w[0]).join("").toUpperCase().slice(0, 2)
-//     : "PI";
-
-//   if (loading) {
-//     return (
-//       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-//         <TransactionalHeader title="Personal Information" onBack={() => router.back()} />
-//         <View style={styles.loadingContainer}>
-//           <ActivityIndicator size="large" color={AmbColors.primary} />
-//           <Text style={styles.loadingText}>Loading information...</Text>
-//         </View>
-//       </SafeAreaView>
-//     );
-//   }
-
-//   return (
-//     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-//       <TransactionalHeader
-//         title="Personal Information"
-//         onBack={() => router.back()}
-//         rightElement={
-//           <TouchableOpacity
-//             style={[styles.editBtn, isEditing && styles.editBtnActive]}
-//             onPress={handleEditToggle}
-//             activeOpacity={0.8}
-//           >
-//             <MaterialIcons
-//               name={isEditing ? 'close' : 'edit'}
-//               size={14}
-//               color={isEditing ? AmbColors.error : AmbColors.primary}
-//             />
-//             {/* <Text style={[styles.editBtnText, isEditing && styles.editBtnTextActive]}>
-//               {isEditing ? "Cancel" : "Edit"}
-//             </Text> */}
-//           </TouchableOpacity>
-//         }
-//       />
-
-//       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-//         <ScrollView
-//           contentContainerStyle={styles.scroll}
-//           showsVerticalScrollIndicator={false}
-//           keyboardShouldPersistTaps="handled"
-//         >
-//           {!!successMsg && (
-//             <View style={styles.successBanner}>
-//               <MaterialIcons name="check-circle" size={16} color={AmbColors.tertiary} />
-//               <Text style={styles.successText}>{successMsg}</Text>
-//             </View>
-//           )}
-
-//           {/* ── Profile Hero ── */}
-//           <View style={styles.heroCard}>
-//             <TouchableOpacity
-//               style={styles.photoCircle}
-//               onPress={isEditing ? handlePhotoPress : undefined}
-//               activeOpacity={isEditing ? 0.8 : 1}
-//             >
-//               {photoSource ? (
-//                 <Image source={photoSource} style={styles.photoImage} />
-//               ) : (
-//                 <Text style={styles.photoInitials}>{initials}</Text>
-//               )}
-//               {isEditing && (
-//                 <View style={styles.photoBadge}>
-//                   <MaterialIcons name="camera-alt" size={14} color="#fff" />
-//                 </View>
-//               )}
-//             </TouchableOpacity>
-//             {errors.photo ? <Text style={[styles.errorText, { marginTop: 4 }]}>{errors.photo}</Text> : null}
-//             <Text style={styles.heroName}>{form.name || "Ambulance Owner"}</Text>
-//             <Text style={styles.heroId}>ID: {vendorId || "—"}</Text>
-//           </View>
-
-//           {/* ── Basic Details ── */}
-//           <View style={styles.section}>
-//             <View style={styles.sectionHeader}>
-//               <MaterialIcons name="person" size={16} color={AmbColors.primary} />
-//               <Text style={styles.sectionTitle}>Basic Details</Text>
-//             </View>
-//             <InputField label="Full Name" field="name" placeholder="Alex Thompson" required isEditing={isEditing} value={form.name} onChangeText={(v) => setField("name", v)} error={errors.name} />
-
-//             <View style={styles.fieldGroup}>
-//               <Text style={styles.fieldLabel}>GENDER <Text style={styles.required}>*</Text></Text>
-//               <View style={styles.chipRow}>
-//                 {GENDER_OPTIONS.map((opt) => (
-//                   <TouchableOpacity
-//                     key={opt.value}
-//                     style={[styles.optChip, form.gender === opt.value && styles.optChipActive]}
-//                     onPress={() => isEditing && setField("gender", opt.value)}
-//                     activeOpacity={isEditing ? 0.8 : 1}
-//                     disabled={!isEditing}
-//                   >
-//                     <Text style={[styles.optChipText, form.gender === opt.value && styles.optChipTextActive]}>
-//                       {opt.label}
-//                     </Text>
-//                   </TouchableOpacity>
-//                 ))}
-//               </View>
-//               {errors.gender ? <Text style={styles.errorText}>{errors.gender}</Text> : null}
-//             </View>
-
-//             <View style={styles.fieldGroup}>
-//               <Text style={styles.fieldLabel}>DATE OF BIRTH <Text style={styles.required}>*</Text></Text>
-//               <TouchableOpacity
-//                 style={[styles.dateRow, !isEditing && styles.inputDisabled]}
-//                 onPress={() => isEditing && setShowDobPicker(true)}
-//                 activeOpacity={isEditing ? 0.8 : 1}
-//               >
-//                 <MaterialIcons name="cake" size={18} color={AmbColors.outline} />
-//                 <Text style={[styles.dateText, !form.dob && styles.datePlaceholder]}>
-//                   {form.dob || "Select date"}
-//                 </Text>
-//                 {isEditing && <MaterialIcons name="calendar-today" size={16} color={AmbColors.outline} />}
-//               </TouchableOpacity>
-//               {errors.dob ? <Text style={styles.errorText}>{errors.dob}</Text> : null}
-//               {showDobPicker && (
-//                 <DateTimePicker
-//                   mode="date"
-//                   display={Platform.OS === "ios" ? "spinner" : "default"}
-//                   value={form.dob ? new Date(form.dob) : new Date()}
-//                   onChange={handleDobChange}
-//                   maximumDate={new Date()}
-//                 />
-//               )}
-//             </View>
-
-//             <View style={styles.fieldGroup}>
-//               <Text style={styles.fieldLabel}>BLOOD GROUP</Text>
-//               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-//                 <View style={styles.chipRow}>
-//                   {BLOOD_GROUPS.map((bg) => (
-//                     <TouchableOpacity
-//                       key={bg}
-//                       style={[styles.bloodChip, form.bloodGroup === bg && styles.bloodChipActive]}
-//                       onPress={() => isEditing && setField("bloodGroup", bg)}
-//                       activeOpacity={isEditing ? 0.8 : 1}
-//                       disabled={!isEditing}
-//                     >
-//                       <Text style={[styles.bloodChipText, form.bloodGroup === bg && styles.bloodChipTextActive]}>
-//                         {bg}
-//                       </Text>
-//                     </TouchableOpacity>
-//                   ))}
-//                 </View>
-//               </ScrollView>
-//             </View>
-//           </View>
-
-//           {/* ── Contact Information ── */}
-//           <View style={styles.section}>
-//             <View style={styles.sectionHeader}>
-//               <MaterialIcons name="contact-phone" size={16} color={AmbColors.primary} />
-//               <Text style={styles.sectionTitle}>Contact Information</Text>
-//             </View>
-//             <InputField label="Email Address" field="email" placeholder="alex@example.com" keyboardType="email-address" autoCapitalize="none" required isEditing={isEditing} value={form.email} onChangeText={(v) => setField("email", v)} error={errors.email} />
-//             <InputField label="Phone Number" field="phone" placeholder="+91 88765 43210" keyboardType="phone-pad" maxLength={10} required isEditing={isEditing} value={form.phone} onChangeText={(v) => setField("phone", v)} error={errors.phone} />
-//             <InputField label="Alt Phone Number" field="altPhone" placeholder="+91 88765 43211" keyboardType="phone-pad" maxLength={10} isEditing={isEditing} value={form.altPhone} onChangeText={(v) => setField("altPhone", v)} error={errors.altPhone} />
-//           </View>
-
-//           {/* ── Residential Address ── */}
-//           <View style={styles.section}>
-//             <View style={styles.sectionHeader}>
-//               <MaterialIcons name="location-on" size={16} color={AmbColors.primary} />
-//               <Text style={styles.sectionTitle}>Residential Address</Text>
-//             </View>
-//             <InputField label="Address Line 1" field="addr1" placeholder="42, Emerald Heights Residency" required isEditing={isEditing} value={form.addr1} onChangeText={(v) => setField("addr1", v)} error={errors.addr1} />
-//             <InputField label="Address Line 2" field="addr2" placeholder="Near Central Park, Sector 15" isEditing={isEditing} value={form.addr2} onChangeText={(v) => setField("addr2", v)} error={errors.addr2} />
-
-//             <View style={{ zIndex: 9999 }}>
-//               <View style={fieldStyles.labelRow}>
-//                 <Text style={fieldStyles.label}>City</Text>
-//                 <Text style={fieldStyles.requiredStar}>*</Text>
-//               </View>
-//               {isEditing ? (
-//                 <>
-//                   <TextInput
-//                     style={[fieldStyles.input, errors.city ? fieldStyles.inputError : null]}
-//                     value={cityQuery}
-//                     placeholder="Type city name"
-//                     placeholderTextColor={Colors.light.outline}
-//                     onChangeText={(text) => {
-//                       setCitySelected(false);
-//                       setCityQuery(text);
-//                       setForm((p) => ({ ...p, city: text }));
-//                     }}
-//                   />
-//                   {errors.city && <Text style={fieldStyles.errorText}>{errors.city}</Text>}
-//                   {cityResults.length > 0 && (
-//                     <View style={styles.cityDropdown}>
-//                       <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={{ maxHeight: 200 }}>
-//                         {cityResults.map((item) => (
-//                           <TouchableOpacity
-//                             key={item.place_id}
-//                             style={styles.cityDropdownItem}
-//                             onPress={() => fetchPlaceDetails(item.place_id)}
-//                           >
-//                             <MaterialIcons name="location-on" size={14} color={Colors.light.outline} style={{ marginRight: 6, marginTop: 1 }} />
-//                             <Text style={styles.cityDropdownText} numberOfLines={1}>{item.description}</Text>
-//                           </TouchableOpacity>
-//                         ))}
-//                       </ScrollView>
-//                     </View>
-//                   )}
-//                 </>
-//               ) : (
-//                 <Text style={fieldStyles.valueText}>{form.city || "—"}</Text>
-//               )}
-//             </View>
-
-//             <View style={fieldStyles.wrap}>
-//               <View style={fieldStyles.labelRow}>
-//                 <Text style={fieldStyles.label}>State</Text>
-//                 <Text style={fieldStyles.requiredStar}>*</Text>
-//               </View>
-//               <TextInput
-//                 value={form.state}
-//                 editable={false}
-//                 placeholder="Auto-filled from city"
-//                 placeholderTextColor={Colors.light.outline}
-//                 style={[fieldStyles.input, { backgroundColor: "#E5E7EB" }]}
-//               />
-//               {errors.state && <Text style={fieldStyles.errorText}>{errors.state}</Text>}
-//             </View>
-
-//             <View style={fieldStyles.wrap}>
-//               <View style={fieldStyles.labelRow}>
-//                 <Text style={fieldStyles.label}>PIN Code</Text>
-//                 <Text style={fieldStyles.requiredStar}>*</Text>
-//               </View>
-//               {isEditing ? (
-//                 <TextInput
-//                   value={form.pin}
-//                   keyboardType="number-pad"
-//                   placeholder="Enter PIN"
-//                   placeholderTextColor={Colors.light.outline}
-//                   maxLength={6}
-//                   style={[fieldStyles.input, errors.pin ? fieldStyles.inputError : null]}
-//                   onChangeText={(text) => {
-//                     const value = text.replace(/[^0-9]/g, "").slice(0, 6);
-//                     setForm((p) => ({ ...p, pin: value }));
-//                     if (value.length === 6) setErrors((prev) => { const copy = { ...prev }; delete copy.pin; return copy; });
-//                   }}
-//                 />
-//               ) : (
-//                 <Text style={fieldStyles.valueText}>{form.pin || "—"}</Text>
-//               )}
-//               {errors.pin && <Text style={fieldStyles.errorText}>{errors.pin}</Text>}
-//             </View>
-//           </View>
-
-//           {/* ── Identity Documents ── */}
-//           <View style={styles.section}>
-//             <View style={styles.sectionHeader}>
-//               <MaterialIcons name="badge" size={16} color={AmbColors.primary} />
-//               <Text style={styles.sectionTitle}>Identity Documents</Text>
-//             </View>
-
-//             <View style={styles.fieldGroup}>
-//               <Text style={styles.fieldLabel}>AADHAAR NUMBER <Text style={styles.required}>*</Text></Text>
-//               <View style={[styles.inputWrapper, !isEditing && styles.inputDisabled]}>
-//                 <TextInput
-//                   style={styles.textInput}
-//                   placeholder="XXXX XXXX XXXX"
-//                   placeholderTextColor={`${AmbColors.outline}70`}
-//                   value={form.adhaarNo}
-//                   onChangeText={(v) => setField("adhaarNo", v.replace(/\D/g, "").slice(0, 12))}
-//                   editable={isEditing}
-//                   keyboardType="numeric"
-//                   maxLength={12}
-//                 />
-//               </View>
-//               {errors.adhaarNo ? <Text style={styles.errorText}>{errors.adhaarNo}</Text> : null}
-//             </View>
-
-//             <DocUploadBox label="Aadhaar Document" uri={adhaarUri} base64={adhaarBase64} isPdf={adhaarIsPdf} isEditing={isEditing} onPick={pickAdhaarDoc} onView={viewAdhaarDoc} />
-
-//             <View style={styles.fieldGroup}>
-//               <Text style={styles.fieldLabel}>PAN NUMBER <Text style={styles.required}>*</Text></Text>
-//               <View style={[styles.inputWrapper, !isEditing && styles.inputDisabled]}>
-//                 <TextInput
-//                   style={styles.textInput}
-//                   placeholder="ABCDE 1234 F"
-//                   placeholderTextColor={`${AmbColors.outline}70`}
-//                   value={form.panNo}
-//                   onChangeText={(v) => setField("panNo", v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10))}
-//                   editable={isEditing}
-//                   autoCapitalize="characters"
-//                   maxLength={10}
-//                 />
-//               </View>
-//               {errors.panNo ? <Text style={styles.errorText}>{errors.panNo}</Text> : null}
-//             </View>
-
-//             <DocUploadBox label="PAN Document" uri={panUri} base64={panBase64} isPdf={panIsPdf} isEditing={isEditing} onPick={pickPanDoc} onView={viewPanDoc} />
-//           </View>
-
-//           <View style={{ height: 100 }} />
-//         </ScrollView>
-//       </KeyboardAvoidingView>
-
-//       {isEditing && (
-//         <View style={styles.footer}>
-//           <TouchableOpacity
-//             style={[styles.submitBtn, saving && styles.submitBtnDisabled]}
-//             onPress={handleSubmit}
-//             activeOpacity={0.85}
-//             disabled={saving}
-//           >
-//             {saving ? (
-//               <ActivityIndicator size="small" color="#fff" />
-//             ) : (
-//               <MaterialIcons name="check-circle" size={20} color="#fff" />
-//             )}
-//             <Text style={styles.submitBtnText}>{saving ? "Saving..." : "Save Changes"}</Text>
-//           </TouchableOpacity>
-//         </View>
-//       )}
-
-//       <Modal
-//         visible={!!viewingImageUri}
-//         transparent
-//         animationType="fade"
-//         onRequestClose={() => setViewingImageUri(null)}
-//       >
-//         <View style={styles.imageViewerOverlay}>
-//           <TouchableOpacity style={styles.imageViewerClose} onPress={() => setViewingImageUri(null)}>
-//             <MaterialIcons name="close" size={28} color="#fff" />
-//           </TouchableOpacity>
-//           {viewingImageUri && (
-//             <Image
-//               source={{ uri: viewingImageUri }}
-//               style={styles.imageViewerImg}
-//               resizeMode="contain"
-//             />
-//           )}
-//         </View>
-//       </Modal>
-//     </SafeAreaView>
-//   );
-// }
-
-// // ─── Doc Upload Box ───────────────────────────────────────────────────────────
-
-// function DocUploadBox({
-//   label, uri, base64, isPdf, isEditing, onPick, onView,
-// }: {
-//   label: string; uri: string | null; base64: string | null;
-//   isPdf: boolean; isEditing: boolean; onPick: () => void; onView?: () => void;
-// }) {
-//   const hasDoc = !!(uri || base64 || isPdf);
-//   const imageSource = (!isPdf && uri)
-//     ? { uri }
-//     : (!isPdf && base64)
-//       ? { uri: `data:image/jpeg;base64,${base64}` }
-//       : null;
-
-//   const handlePress = () => {
-//     if (hasDoc && !isEditing && onView) { onView(); }
-//     else if (isEditing) { onPick(); }
-//   };
-
-//   return (
-//     <TouchableOpacity
-//       style={[styles.docBox, hasDoc && styles.docBoxDone]}
-//       onPress={handlePress}
-//       activeOpacity={(isEditing || (hasDoc && onView)) ? 0.8 : 1}
-//       disabled={!isEditing && !(hasDoc && onView)}
-//     >
-//       {hasDoc ? (
-//         imageSource ? (
-//           <Image source={imageSource} style={styles.docThumb} resizeMode="cover" />
-//         ) : (
-//           <View style={styles.docPdfBadge}>
-//             <MaterialIcons name="picture-as-pdf" size={28} color={AmbColors.error} />
-//             <Text style={styles.docPdfText}>PDF Uploaded</Text>
-//           </View>
-//         )
-//       ) : (
-//         <View style={styles.docPlaceholder}>
-//           <MaterialIcons name="upload-file" size={28} color={`${AmbColors.outline}60`} />
-//           <Text style={styles.docPlaceholderText}>{isEditing ? `Upload ${label}` : `No ${label}`}</Text>
-//         </View>
-//       )}
-//       <View style={styles.docLabelRow}>
-//         <Text style={styles.docLabel}>{label}</Text>
-//         {hasDoc && <MaterialIcons name="check-circle" size={14} color={AmbColors.tertiary} />}
-//         {isEditing && !hasDoc && <MaterialIcons name="add" size={14} color={AmbColors.outline} />}
-//       </View>
-//     </TouchableOpacity>
-//   );
-// }
-
-// // ─── Styles ───────────────────────────────────────────────────────────────────
-
-// const fieldStyles = StyleSheet.create({
-//   wrap: { marginBottom: Spacing.sm },
-//   labelRow: { flexDirection: "row", alignItems: "center", gap: 3, marginBottom: 4 },
-//   label: { fontFamily: FontFamily.bodyMedium, fontSize: FontSize.labelMedium, color: Colors.light.onSurfaceVariant },
-//   requiredStar: { color: Colors.light.error, fontSize: FontSize.labelMedium, fontFamily: FontFamily.bodyMedium },
-//   errorText: { color: Colors.light.error, fontSize: FontSize.labelSmall, fontFamily: FontFamily.body, marginTop: 4 },
-//   input: {
-//     backgroundColor: AmbColors.surfaceContainerLow,
-//     borderRadius: AmbRadius.md,
-//     paddingHorizontal: 14,
-//     height: 50,
-//     justifyContent: "center",
-//     fontFamily: "Inter_400Regular",
-//     fontSize: 14,
-//     color: AmbColors.onSurface,
-//   },
-//   inputError: { borderWidth: 1, borderColor: Colors.light.error },
-//   valueText: { fontFamily: FontFamily.body, fontSize: FontSize.bodyMedium, color: Colors.light.onSurface, paddingVertical: 6 },
-// });
-
-// const styles = StyleSheet.create({
-//   safe: { flex: 1, backgroundColor: AmbColors.surface },
-//   scroll: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20 },
-
-//   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
-//   loadingText: { fontFamily: "Inter_400Regular", fontSize: 14, color: AmbColors.secondary },
-
-//   successBanner: {
-//     flexDirection: "row", alignItems: "center", gap: 8,
-//     backgroundColor: `${AmbColors.tertiary}12`, borderWidth: 1,
-//     borderColor: `${AmbColors.tertiary}30`, borderRadius: AmbRadius.md,
-//     paddingHorizontal: 14, paddingVertical: 10, marginBottom: 14,
-//   },
-//   successText: { fontFamily: "Inter_500Medium", fontSize: 13, color: AmbColors.tertiary, flex: 1 },
-
-//   cityDropdown: {
-//     position: "absolute", top: 52, left: 0, right: 0,
-//     backgroundColor: "#fff", borderRadius: Radius.lg,
-//     elevation: 10, shadowColor: "#000",
-//     shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, zIndex: 9999,
-//   },
-//   cityDropdownItem: {
-//     flexDirection: "row", alignItems: "flex-start",
-//     paddingHorizontal: Spacing.md, paddingVertical: 10,
-//     borderBottomWidth: 1, borderBottomColor: Colors.light.outlineVariant,
-//   },
-//   cityDropdownText: { flex: 1, fontFamily: FontFamily.body, fontSize: FontSize.bodySmall, color: Colors.light.onSurface },
-
-//   editBtn: {
-//     flexDirection: 'row',
-//     alignItems: 'center',
-//     gap: 4,
-//     height: 34,
-//     paddingHorizontal: 12,
-//     borderRadius: AmbRadius.pill,
-//     backgroundColor: `${AmbColors.primary}15`,
-//   },
-//   editBtnActive: { backgroundColor: `${AmbColors.error}15` },
-//   editBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: AmbColors.primary },
-//   editBtnTextActive: { color: AmbColors.error },
-
-//   heroCard: {
-//     backgroundColor: AmbColors.surfaceContainerLowest, borderRadius: AmbRadius.xl,
-//     padding: 24, marginBottom: 14, alignItems: "center", gap: 6, ...AmbShadow.subtle,
-//   },
-//   photoCircle: {
-//     width: 100, height: 100, borderRadius: 50,
-//     backgroundColor: AmbColors.primaryFixed,
-//     justifyContent: "center", alignItems: "center",
-//     marginBottom: 4, overflow: "hidden",
-//     borderWidth: 3, borderColor: AmbColors.surfaceContainerLow, ...AmbShadow.card,
-//   },
-//   photoImage: { width: 100, height: 100 },
-//   photoInitials: { fontFamily: "Inter_600SemiBold", fontSize: 32, color: AmbColors.primary },
-//   photoBadge: {
-//     position: "absolute", bottom: 0, right: 0,
-//     width: 28, height: 28, borderRadius: 14,
-//     backgroundColor: AmbColors.primary,
-//     justifyContent: "center", alignItems: "center",
-//     borderWidth: 2, borderColor: "#fff",
-//   },
-//   heroName: { fontFamily: "Inter_600SemiBold", fontSize: 18, color: AmbColors.onSurface },
-//   heroId: { fontFamily: "Inter_400Regular", fontSize: 12, color: AmbColors.secondary },
-
-//   section: {
-//     backgroundColor: AmbColors.surfaceContainerLowest, borderRadius: AmbRadius.xl,
-//     padding: 20, marginBottom: 14, gap: 14, ...AmbShadow.subtle,
-//   },
-//   sectionHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 2 },
-//   sectionTitle: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: AmbColors.onSurface },
-
-//   fieldGroup: { gap: 6 },
-//   fieldLabel: { fontFamily: "Inter_600SemiBold", fontSize: 10, color: AmbColors.onSurfaceVariant, letterSpacing: 1, textTransform: "uppercase" },
-//   required: { color: AmbColors.error },
-//   inputWrapper: { backgroundColor: AmbColors.surfaceContainerLow, borderRadius: AmbRadius.md, height: 50, justifyContent: "center", paddingHorizontal: 14 },
-//   inputDisabled: { backgroundColor: AmbColors.surfaceContainerHighest, opacity: 0.75 },
-//   textInput: { fontFamily: "Inter_400Regular", fontSize: 14, color: AmbColors.onSurface },
-//   errorText: { fontFamily: "Inter_400Regular", fontSize: 11, color: AmbColors.error },
-
-//   dateRow: {
-//     flexDirection: "row", alignItems: "center", gap: 10,
-//     backgroundColor: AmbColors.surfaceContainerLow, borderRadius: AmbRadius.md,
-//     height: 50, paddingHorizontal: 14,
-//   },
-//   dateText: { flex: 1, fontFamily: "Inter_400Regular", fontSize: 14, color: AmbColors.onSurface },
-//   datePlaceholder: { color: `${AmbColors.outline}70` },
-
-//   rowFields: { flexDirection: "row", gap: 10 },
-
-//   chipRow: { flexDirection: "row", gap: 8 },
-//   optChip: { paddingHorizontal: 18, paddingVertical: 9, borderRadius: AmbRadius.pill, backgroundColor: AmbColors.surfaceContainerLow, borderWidth: 1, borderColor: AmbColors.outlineVariant },
-//   optChipActive: { backgroundColor: AmbColors.primary, borderColor: AmbColors.primary },
-//   optChipText: { fontFamily: "Inter_500Medium", fontSize: 13, color: AmbColors.onSurfaceVariant },
-//   optChipTextActive: { color: "#fff" },
-
-//   bloodChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: AmbRadius.pill, backgroundColor: AmbColors.surfaceContainerLow, borderWidth: 1, borderColor: AmbColors.outlineVariant },
-//   bloodChipActive: { backgroundColor: AmbColors.primaryContainer, borderColor: AmbColors.primaryContainer },
-//   bloodChipText: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: AmbColors.onSurfaceVariant },
-//   bloodChipTextActive: { color: "#fff" },
-
-//   docBox: { borderWidth: 1.5, borderStyle: "dashed", borderColor: AmbColors.outlineVariant, borderRadius: AmbRadius.md, overflow: "hidden", backgroundColor: AmbColors.surfaceContainerLow, minHeight: 120 },
-//   docBoxDone: { borderStyle: "solid", borderColor: AmbColors.tertiary, backgroundColor: `${AmbColors.tertiary}08` },
-//   docThumb: { width: "100%", height: 100 },
-//   docPdfBadge: { height: 90, justifyContent: "center", alignItems: "center", gap: 6 },
-//   docPdfText: { fontFamily: "Inter_500Medium", fontSize: 12, color: AmbColors.error },
-//   docPlaceholder: { height: 90, justifyContent: "center", alignItems: "center", gap: 6 },
-//   docPlaceholderText: { fontFamily: "Inter_500Medium", fontSize: 12, color: `${AmbColors.outline}80` },
-//   docLabelRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: 1, borderTopColor: AmbColors.surfaceContainerHigh },
-//   docLabel: { fontFamily: "Inter_500Medium", fontSize: 12, color: AmbColors.onSurfaceVariant },
-
-//   footer: {
-//     position: "absolute", bottom: 0, left: 0, right: 0,
-//     backgroundColor: AmbColors.surfaceContainerLowest,
-//     paddingHorizontal: 20, paddingTop: 14, paddingBottom: 24,
-//     borderTopLeftRadius: 24, borderTopRightRadius: 24, ...AmbShadow.elevated,
-//   },
-//   submitBtn: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 10, height: 54, backgroundColor: AmbColors.primary, borderRadius: AmbRadius.md, ...AmbShadow.card },
-//   submitBtnDisabled: { opacity: 0.6 },
-//   submitBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 16, color: "#ffffff" },
-
-//   imageViewerOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.92)", justifyContent: "center", alignItems: "center" },
-//   imageViewerClose: { position: "absolute", top: 48, right: 20, zIndex: 10, padding: 8 },
-//   imageViewerImg: { width: Dimensions.get("window").width, height: Dimensions.get("window").height * 0.75 },
-// });
 import React, { useState, useEffect, useContext } from "react";
 import {
   View,
@@ -1147,10 +21,9 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from 'expo-file-system/legacy';
-import * as ImageManipulator from 'expo-image-manipulator';
-// ✅ FIX ISSUE 1: Import IntentLauncher for Android PDF opening with explicit MIME type
-import * as IntentLauncher from 'expo-intent-launcher';
+import * as FileSystem from "expo-file-system/legacy";
+import * as ImageManipulator from "expo-image-manipulator";
+import * as IntentLauncher from "expo-intent-launcher";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   AmbColors,
@@ -1169,7 +42,6 @@ import {
   Shadow,
   ButtonSize,
 } from "@/src/shared/constants/theme";
-// ✅ FIX ISSUE 2: Import ActionModal for success feedback
 import ActionModal from "@/src/shared/components/ActionModal";
 
 const BASE_URL = "https://coreapi-service-111763741518.asia-south1.run.app";
@@ -1199,72 +71,71 @@ const DEFAULT_FORM = {
   panNo: "",
 };
 
-// ────────────────────────────────────────────────────────────────────────────
-// ✅ FIX ISSUE 1 — ROOT CAUSE + FIX:
-//
-// OLD CODE used Linking.openURL(contentUri) on Android.
-// Linking fires an implicit ACTION_VIEW intent WITHOUT a MIME type.
-// Android cannot reliably resolve the PDF viewer from a content:// URI alone
-// because the extension is not exposed through the content provider.
-// Result: PDF app opens but receives wrong/no type → renders blank.
-//
-// FIX: On Android, use IntentLauncher.startActivityAsync with
-// contentType: "application/pdf" explicitly set.
-// This fires ACTION_VIEW with the MIME type attached → PDF renders correctly.
-// On iOS, Linking.openURL with the file:// URI still works fine.
-// ────────────────────────────────────────────────────────────────────────────
-async function openPdf(fileUri: string): Promise<void> {
-  // Debug trace — remove in production
-  console.log("[openPdf] fileUri:", fileUri);
+// ─── PDF helpers ─────────────────────────────────────────────────────────────
 
+async function openPdf(fileUri: string): Promise<void> {
+  console.log("[openPdf] fileUri:", fileUri);
   if (Platform.OS === "android") {
-    // Convert file:// → content:// so Android can share it across apps
     const contentUri = await FileSystem.getContentUriAsync(fileUri);
     console.log("[openPdf] contentUri:", contentUri);
-    // Use IntentLauncher with explicit MIME type — this is the fix
     await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
       data: contentUri,
-      flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
+      flags: 1,
       type: "application/pdf",
     });
   } else {
-    // iOS: file:// URI works directly with Linking
     await Linking.openURL(fileUri);
   }
 }
 
-async function base64ToTempUri(base64: string, filename: string): Promise<string> {
+async function base64ToTempUri(
+  base64: string,
+  filename: string,
+): Promise<string> {
   const cacheDir = FileSystem.cacheDirectory;
   if (!cacheDir) throw new Error("Cache directory unavailable on this device.");
-
-  // Debug trace — remove in production
   console.log("[base64ToTempUri] base64 prefix:", base64?.slice(0, 30));
-
-  // Strip any data URI prefix the API might have included
-  // e.g. "data:application/pdf;base64,JVBER..." → "JVBER..."
   const clean = base64.includes(",") ? base64.split(",")[1] : base64;
-
   const uri = cacheDir + filename;
   await FileSystem.writeAsStringAsync(uri, clean, {
-    encoding: "base64" as any,
+    encoding: FileSystem.EncodingType.Base64,
   });
-
   console.log("[base64ToTempUri] written to:", uri);
   return uri;
 }
 
+// ─── InputField ───────────────────────────────────────────────────────────────
+
 function InputField({
-  label, field, placeholder, keyboardType, maxLength, autoCapitalize, required,
-  isEditing, value, onChangeText, error,
+  label,
+  field,
+  placeholder,
+  keyboardType,
+  maxLength,
+  autoCapitalize,
+  required,
+  isEditing,
+  value,
+  onChangeText,
+  error,
 }: {
-  label: string; field: string; placeholder?: string;
-  keyboardType?: any; maxLength?: number; autoCapitalize?: any; required?: boolean;
-  isEditing: boolean; value: string; onChangeText: (v: string) => void; error?: string;
+  label: string;
+  field: string;
+  placeholder?: string;
+  keyboardType?: any;
+  maxLength?: number;
+  autoCapitalize?: any;
+  required?: boolean;
+  isEditing: boolean;
+  value: string;
+  onChangeText: (v: string) => void;
+  error?: string;
 }) {
   return (
     <View style={styles.fieldGroup}>
       <Text style={styles.fieldLabel}>
-        {label}{required && <Text style={styles.required}> *</Text>}
+        {label}
+        {required && <Text style={styles.required}> *</Text>}
       </Text>
       <View style={[styles.inputWrapper, !isEditing && styles.inputDisabled]}>
         <TextInput
@@ -1284,6 +155,8 @@ function InputField({
   );
 }
 
+// ─── Screen ───────────────────────────────────────────────────────────────────
+
 export default function PersonalInformationScreen() {
   const auth = useContext(AuthContext);
   const vendorId = auth?.user?.vendorId ?? "";
@@ -1293,28 +166,25 @@ export default function PersonalInformationScreen() {
 
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
+
   const [panUri, setPanUri] = useState<string | null>(null);
   const [panBase64, setPanBase64] = useState<string | null>(null);
   const [panIsPdf, setPanIsPdf] = useState(false);
   const [panMimeType, setPanMimeType] = useState<string | null>(null);
   const [panName, setPanName] = useState<string | null>(null);
+
   const [adhaarUri, setAdhaarUri] = useState<string | null>(null);
   const [adhaarBase64, setAdhaarBase64] = useState<string | null>(null);
   const [adhaarIsPdf, setAdhaarIsPdf] = useState(false);
   const [adhaarMimeType, setAdhaarMimeType] = useState<string | null>(null);
   const [adhaarName, setAdhaarName] = useState<string | null>(null);
-  const [viewingImageUri, setViewingImageUri] = useState<string | null>(null);
 
+  const [viewingImageUri, setViewingImageUri] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  // ✅ FIX ISSUE 2: Replace successMsg string with modal state
-  // OLD: const [successMsg, setSuccessMsg] = useState("");
-  // NEW: boolean flag to show ActionModal after successful save
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-
   const [showDobPicker, setShowDobPicker] = useState(false);
   const [cityQuery, setCityQuery] = useState("");
   const [cityResults, setCityResults] = useState<any[]>([]);
@@ -1334,9 +204,7 @@ export default function PersonalInformationScreen() {
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(
-          `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
-            cityQuery,
-          )}&types=(cities)&components=country:in&key=${GoogleMapApiKey}`,
+          `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(cityQuery)}&types=(cities)&components=country:in&key=${GoogleMapApiKey}`,
         );
         const data = await res.json();
         setCityResults(data.predictions || []);
@@ -1356,14 +224,16 @@ export default function PersonalInformationScreen() {
       );
       const data = await res.json();
       const details = data.result;
-      let city = "";
-      let state = "";
-      let pin = "";
+      let city = "",
+        state = "",
+        pin = "";
       details.address_components.forEach((comp: any) => {
         const types = comp.types;
         if (types.includes("locality")) city = comp.long_name;
-        if (!city && types.includes("administrative_area_level_2")) city = comp.long_name;
-        if (types.includes("administrative_area_level_1")) state = comp.long_name;
+        if (!city && types.includes("administrative_area_level_2"))
+          city = comp.long_name;
+        if (types.includes("administrative_area_level_1"))
+          state = comp.long_name;
         if (types.includes("postal_code")) pin = comp.long_name;
       });
       setCityQuery(city);
@@ -1381,7 +251,10 @@ export default function PersonalInformationScreen() {
   };
 
   useEffect(() => {
-    if (!vendorId) { setLoading(false); return; }
+    if (!vendorId) {
+      setLoading(false);
+      return;
+    }
     fetch(`${BASE_URL}/api/Ambulance/GetAmbulance_Owner_ById/${vendorId}`)
       .then((r) => r.json())
       .then((data) => {
@@ -1409,12 +282,16 @@ export default function PersonalInformationScreen() {
         setCityQuery(mapped.city);
         if (docs.photo) setPhotoBase64(docs.photo);
         if (docs.pan) {
-          if (isPdfB64(docs.pan)) { setPanIsPdf(true); setPanBase64(docs.pan); }
-          else setPanBase64(docs.pan);
+          if (isPdfB64(docs.pan)) {
+            setPanIsPdf(true);
+            setPanBase64(docs.pan);
+          } else setPanBase64(docs.pan);
         }
         if (docs.adhaar) {
-          if (isPdfB64(docs.adhaar)) { setAdhaarIsPdf(true); setAdhaarBase64(docs.adhaar); }
-          else setAdhaarBase64(docs.adhaar);
+          if (isPdfB64(docs.adhaar)) {
+            setAdhaarIsPdf(true);
+            setAdhaarBase64(docs.adhaar);
+          } else setAdhaarBase64(docs.adhaar);
         }
       })
       .catch((e) => console.error("Fetch personal info:", e))
@@ -1423,7 +300,12 @@ export default function PersonalInformationScreen() {
 
   const setField = (key: keyof typeof DEFAULT_FORM, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
-    if (errors[key]) setErrors((prev) => { const n = { ...prev }; delete n[key]; return n; });
+    if (errors[key])
+      setErrors((prev) => {
+        const n = { ...prev };
+        delete n[key];
+        return n;
+      });
   };
 
   const handleEditToggle = () => {
@@ -1444,11 +326,17 @@ export default function PersonalInformationScreen() {
     }
   };
 
+  // ─── Photo pickers ───────────────────────────────────────────────────────
+
   const pickPhoto = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("Permission needed", "Gallery permission is required to select a photo");
+        Alert.alert(
+          "Permission needed",
+          "Gallery permission is required to select a photo",
+        );
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -1498,7 +386,10 @@ export default function PersonalInformationScreen() {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("Permission needed", "Camera permission is required to take a photo");
+        Alert.alert(
+          "Permission needed",
+          "Camera permission is required to take a photo",
+        );
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
@@ -1530,6 +421,8 @@ export default function PersonalInformationScreen() {
     ]);
   };
 
+  // ─── Document pickers ────────────────────────────────────────────────────
+
   const pickPanDoc = async () => {
     const result = await DocumentPicker.getDocumentAsync({
       type: ["image/*", "application/pdf"],
@@ -1538,7 +431,7 @@ export default function PersonalInformationScreen() {
     if (result.canceled) return;
     const file = result.assets[0];
     if (file.size && file.size > 204800) {
-      setErrors(prev => ({ ...prev, pan: "File must be under 200KB" }));
+      setErrors((prev) => ({ ...prev, pan: "File must be under 200KB" }));
       return;
     }
     const isPdf = file.mimeType === "application/pdf";
@@ -1557,7 +450,7 @@ export default function PersonalInformationScreen() {
     if (result.canceled) return;
     const file = result.assets[0];
     if (file.size && file.size > 204800) {
-      setErrors(prev => ({ ...prev, adhaar: "File must be under 200KB" }));
+      setErrors((prev) => ({ ...prev, adhaar: "File must be under 200KB" }));
       return;
     }
     const isPdf = file.mimeType === "application/pdf";
@@ -1568,24 +461,15 @@ export default function PersonalInformationScreen() {
     setAdhaarName(file.name);
   };
 
-  // ────────────────────────────────────────────────────────────────────────
-  // ✅ FIX ISSUE 1 — viewAdhaarDoc
-  //
-  // OLD: await Linking.openURL(contentUri)  ← no MIME type, Android opens blank
-  // NEW: await openPdf(tmpUri)              ← uses IntentLauncher with MIME type
-  // ────────────────────────────────────────────────────────────────────────
+  // ─── Document viewers ────────────────────────────────────────────────────
+
   const viewAdhaarDoc = async () => {
     try {
       if (adhaarUri) {
-        // Newly picked file — URI is already on device
-        if (adhaarIsPdf) {
-          await openPdf(adhaarUri);
-        } else {
-          setViewingImageUri(adhaarUri);
-        }
+        if (adhaarIsPdf) await openPdf(adhaarUri);
+        else setViewingImageUri(adhaarUri);
       } else if (adhaarBase64) {
         if (adhaarIsPdf) {
-          // Write base64 to a temp file then open with explicit MIME type
           const tmpUri = await base64ToTempUri(adhaarBase64, "adhaar_doc.pdf");
           await openPdf(tmpUri);
         } else {
@@ -1598,17 +482,11 @@ export default function PersonalInformationScreen() {
     }
   };
 
-  // ────────────────────────────────────────────────────────────────────────
-  // ✅ FIX ISSUE 1 — viewPanDoc (same fix as above)
-  // ────────────────────────────────────────────────────────────────────────
   const viewPanDoc = async () => {
     try {
       if (panUri) {
-        if (panIsPdf) {
-          await openPdf(panUri);
-        } else {
-          setViewingImageUri(panUri);
-        }
+        if (panIsPdf) await openPdf(panUri);
+        else setViewingImageUri(panUri);
       } else if (panBase64) {
         if (panIsPdf) {
           const tmpUri = await base64ToTempUri(panBase64, "pan_doc.pdf");
@@ -1631,28 +509,46 @@ export default function PersonalInformationScreen() {
   const validate = (): boolean => {
     const err: Record<string, string> = {};
     if (!form.name.trim()) err.name = "Full Name is required";
-    else if (!/^[A-Za-z\s]+$/.test(form.name)) err.name = "Only alphabets allowed";
+    else if (!/^[A-Za-z\s]+$/.test(form.name))
+      err.name = "Only alphabets allowed";
     if (!form.gender) err.gender = "Gender is required";
     if (!form.dob) err.dob = "Date of Birth is required";
     if (!form.email) err.email = "Email is required";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) err.email = "Invalid email format";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
+      err.email = "Invalid email format";
     if (!form.phone) err.phone = "Phone number is required";
-    else if (!/^\d{10}$/.test(form.phone)) err.phone = "Phone must be 10 digits";
-    if (form.altPhone && !/^\d{10}$/.test(form.altPhone)) err.altPhone = "Alt phone must be 10 digits";
+    else if (!/^\d{10}$/.test(form.phone))
+      err.phone = "Phone must be 10 digits";
+    if (form.altPhone && !/^\d{10}$/.test(form.altPhone))
+      err.altPhone = "Alt phone must be 10 digits";
     if (!form.addr1.trim()) err.addr1 = "Address Line 1 is required";
     if (!form.city.trim()) err.city = "City is required";
     if (!form.state.trim()) err.state = "State is required";
     if (!form.pin) err.pin = "PIN code is required";
     else if (!/^\d{6}$/.test(form.pin)) err.pin = "PIN must be 6 digits";
-    if (!form.adhaarNo) err.adhaarNo = "Aadhaar number required";
-    else if (!/^\d{12}$/.test(form.adhaarNo)) err.adhaarNo = "Aadhaar must be 12 digits";
-    if (!form.panNo) err.panNo = "PAN number required";
-    else if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(form.panNo)) err.panNo = "Invalid PAN format (e.g. ABCDE1234F)";
+    if (form.adhaarNo && !/^\d{12}$/.test(form.adhaarNo))
+      err.adhaarNo = "Aadhaar must be 12 digits";
+
+    if (form.panNo && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(form.panNo))
+      err.panNo = "Invalid PAN format (e.g. ABCDE1234F)";
     if (!photoUri && !photoBase64) err.photo = "Profile photo is required";
     setErrors(err);
     return Object.keys(err).length === 0;
   };
 
+  // ─── Submit ───────────────────────────────────────────────────────────────
+  //
+  // ✅ FIX — DOCUMENT PERSISTENCE
+  //
+  // ROOT CAUSE: Previously, documents loaded from the API were stored only in
+  // *Base64 state. handleSubmit only appended *Uri files, so any doc the user
+  // didn't re-pick was silently dropped from FormData → server wiped it.
+  //
+  // FIX: For every file slot, if the user picked a new file use its URI;
+  // otherwise if we have existing base64 data, write it to a temp file and
+  // re-append it. This ensures ALL three files are always sent, preserving
+  // whatever the server already had for any slot the user didn't change.
+  //
   const handleSubmit = async () => {
     if (!validate()) return;
     if (!vendorId) {
@@ -1675,19 +571,83 @@ export default function PersonalInformationScreen() {
       fd.append("City", form.city.trim());
       fd.append("State", form.state.trim());
       fd.append("pin_code", form.pin);
-      fd.append("adhaarNo", form.adhaarNo);
-      fd.append("panNo", form.panNo);
+      // fd.append("adhaarNo", form.adhaarNo);
+      // fd.append("panNo", form.panNo);
+      fd.append("adhaarNo", form.adhaarNo || "");
+      fd.append("panNo", form.panNo || "");
 
+      // ── Photo ──────────────────────────────────────────────────────────
       if (photoUri) {
-        fd.append("photo", { uri: photoUri, name: "photo.jpg", type: "image/jpeg" } as any);
+        // Freshly picked from camera / gallery
+        fd.append("photo", {
+          uri: photoUri,
+          name: "photo.jpg",
+          type: "image/jpeg",
+        } as any);
+      } else if (photoBase64) {
+        // Existing photo from API — re-send so the server doesn't clear it
+        const cleanB64 = photoBase64
+          .replace(/^data:[^;]+;base64,/, "")
+          .replace(/[\s\r\n]/g, "");
+        const tmpUri = await base64ToTempUri(cleanB64, "photo_resubmit.jpg");
+        fd.append("photo", {
+          uri: tmpUri,
+          name: "photo.jpg",
+          type: "image/jpeg",
+        } as any);
       }
+
+      // ── Aadhaar document ───────────────────────────────────────────────
       if (adhaarUri) {
-        const adhaarExt = adhaarMimeType === "application/pdf" ? "pdf" : "jpg";
-        fd.append("adhaar", { uri: adhaarUri, name: adhaarName ?? `adhaar.${adhaarExt}`, type: adhaarMimeType ?? "image/jpeg" } as any);
+        // Freshly picked
+        const ext = adhaarMimeType === "application/pdf" ? "pdf" : "jpg";
+        fd.append("adhaar", {
+          uri: adhaarUri,
+          name: adhaarName ?? `adhaar.${ext}`,
+          type: adhaarMimeType ?? "image/jpeg",
+        } as any);
+      } else if (adhaarBase64) {
+        // Existing from API — re-send to preserve it
+        const cleanB64 = adhaarBase64
+          .replace(/^data:[^;]+;base64,/, "")
+          .replace(/[\s\r\n]/g, "");
+        const isPdf = adhaarIsPdf || cleanB64.startsWith("JVBER");
+        const ext = isPdf ? "pdf" : "jpg";
+        const mime = isPdf ? "application/pdf" : "image/jpeg";
+        const tmpUri = await base64ToTempUri(
+          cleanB64,
+          `adhaar_resubmit.${ext}`,
+        );
+        fd.append("adhaar", {
+          uri: tmpUri,
+          name: `adhaar.${ext}`,
+          type: mime,
+        } as any);
       }
+
+      // ── PAN document ───────────────────────────────────────────────────
       if (panUri) {
-        const panExt = panMimeType === "application/pdf" ? "pdf" : "jpg";
-        fd.append("pan", { uri: panUri, name: panName ?? `pan.${panExt}`, type: panMimeType ?? "image/jpeg" } as any);
+        // Freshly picked
+        const ext = panMimeType === "application/pdf" ? "pdf" : "jpg";
+        fd.append("pan", {
+          uri: panUri,
+          name: panName ?? `pan.${ext}`,
+          type: panMimeType ?? "image/jpeg",
+        } as any);
+      } else if (panBase64) {
+        // Existing from API — re-send to preserve it
+        const cleanB64 = panBase64
+          .replace(/^data:[^;]+;base64,/, "")
+          .replace(/[\s\r\n]/g, "");
+        const isPdf = panIsPdf || cleanB64.startsWith("JVBER");
+        const ext = isPdf ? "pdf" : "jpg";
+        const mime = isPdf ? "application/pdf" : "image/jpeg";
+        const tmpUri = await base64ToTempUri(cleanB64, `pan_resubmit.${ext}`);
+        fd.append("pan", {
+          uri: tmpUri,
+          name: `pan.${ext}`,
+          type: mime,
+        } as any);
       }
 
       const res = await fetch(
@@ -1696,20 +656,23 @@ export default function PersonalInformationScreen() {
       );
       const text = await res.text();
       let data: any;
-      try { data = JSON.parse(text); } catch { data = { message: text }; }
-      if (!res.ok) throw new Error(data?.error || data?.message || "Update failed");
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { message: text };
+      }
+      if (!res.ok)
+        throw new Error(data?.error || data?.message || "Update failed");
 
-      // ✅ FIX ISSUE 2: Trigger success modal instead of inline banner
-      // OLD: setSuccessMsg(data?.message || "Personal information updated successfully");
-      // NEW: open ActionModal — only reaches here on !res.ok check passing (success path)
       setBackupForm(form);
       setIsEditing(false);
-      setShowSuccessModal(true);   // ← modal opens only on success
-
+      setShowSuccessModal(true);
     } catch (e: any) {
       console.error("Update error:", e);
-      // ✅ Modal is NOT shown here — failure goes to Alert only
-      Alert.alert("Update Failed", e.message || "Something went wrong. Please try again.");
+      Alert.alert(
+        "Update Failed",
+        e.message || "Something went wrong. Please try again.",
+      );
     } finally {
       setSaving(false);
     }
@@ -1722,13 +685,23 @@ export default function PersonalInformationScreen() {
       : null;
 
   const initials = form.name.trim()
-    ? form.name.trim().split(" ").filter(Boolean).map((w) => w[0]).join("").toUpperCase().slice(0, 2)
+    ? form.name
+        .trim()
+        .split(" ")
+        .filter(Boolean)
+        .map((w) => w[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
     : "PI";
 
   if (loading) {
     return (
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-        <TransactionalHeader title="Personal Information" onBack={() => router.back()} />
+        <TransactionalHeader
+          title="Personal Information"
+          onBack={() => router.back()}
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={AmbColors.primary} />
           <Text style={styles.loadingText}>Loading information...</Text>
@@ -1749,7 +722,7 @@ export default function PersonalInformationScreen() {
             activeOpacity={0.8}
           >
             <MaterialIcons
-              name={isEditing ? 'close' : 'edit'}
+              name={isEditing ? "close" : "edit"}
               size={14}
               color={isEditing ? AmbColors.error : AmbColors.primary}
             />
@@ -1757,7 +730,10 @@ export default function PersonalInformationScreen() {
         }
       />
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
         <ScrollView
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
@@ -1781,53 +757,100 @@ export default function PersonalInformationScreen() {
                 </View>
               )}
             </TouchableOpacity>
-            {errors.photo ? <Text style={[styles.errorText, { marginTop: 4 }]}>{errors.photo}</Text> : null}
-            <Text style={styles.heroName}>{form.name || "Ambulance Owner"}</Text>
+            {errors.photo ? (
+              <Text style={[styles.errorText, { marginTop: 4 }]}>
+                {errors.photo}
+              </Text>
+            ) : null}
+            <Text style={styles.heroName}>
+              {form.name || "Ambulance Owner"}
+            </Text>
             <Text style={styles.heroId}>ID: {vendorId || "—"}</Text>
           </View>
 
           {/* ── Basic Details ── */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <MaterialIcons name="person" size={16} color={AmbColors.primary} />
+              <MaterialIcons
+                name="person"
+                size={16}
+                color={AmbColors.primary}
+              />
               <Text style={styles.sectionTitle}>Basic Details</Text>
             </View>
-            <InputField label="Full Name" field="name" placeholder="Alex Thompson" required isEditing={isEditing} value={form.name} onChangeText={(v) => setField("name", v)} error={errors.name} />
+            <InputField
+              label="Full Name"
+              field="name"
+              placeholder="Alex Thompson"
+              required
+              isEditing={isEditing}
+              value={form.name}
+              onChangeText={(v) => setField("name", v)}
+              error={errors.name}
+            />
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>GENDER <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.fieldLabel}>
+                GENDER <Text style={styles.required}>*</Text>
+              </Text>
               <View style={styles.chipRow}>
                 {GENDER_OPTIONS.map((opt) => (
                   <TouchableOpacity
                     key={opt.value}
-                    style={[styles.optChip, form.gender === opt.value && styles.optChipActive]}
+                    style={[
+                      styles.optChip,
+                      form.gender === opt.value && styles.optChipActive,
+                    ]}
                     onPress={() => isEditing && setField("gender", opt.value)}
                     activeOpacity={isEditing ? 0.8 : 1}
                     disabled={!isEditing}
                   >
-                    <Text style={[styles.optChipText, form.gender === opt.value && styles.optChipTextActive]}>
+                    <Text
+                      style={[
+                        styles.optChipText,
+                        form.gender === opt.value && styles.optChipTextActive,
+                      ]}
+                    >
                       {opt.label}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
-              {errors.gender ? <Text style={styles.errorText}>{errors.gender}</Text> : null}
+              {errors.gender ? (
+                <Text style={styles.errorText}>{errors.gender}</Text>
+              ) : null}
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>DATE OF BIRTH <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.fieldLabel}>
+                DATE OF BIRTH <Text style={styles.required}>*</Text>
+              </Text>
               <TouchableOpacity
                 style={[styles.dateRow, !isEditing && styles.inputDisabled]}
                 onPress={() => isEditing && setShowDobPicker(true)}
                 activeOpacity={isEditing ? 0.8 : 1}
               >
-                <MaterialIcons name="cake" size={18} color={AmbColors.outline} />
-                <Text style={[styles.dateText, !form.dob && styles.datePlaceholder]}>
+                <MaterialIcons
+                  name="cake"
+                  size={18}
+                  color={AmbColors.outline}
+                />
+                <Text
+                  style={[styles.dateText, !form.dob && styles.datePlaceholder]}
+                >
                   {form.dob || "Select date"}
                 </Text>
-                {isEditing && <MaterialIcons name="calendar-today" size={16} color={AmbColors.outline} />}
+                {isEditing && (
+                  <MaterialIcons
+                    name="calendar-today"
+                    size={16}
+                    color={AmbColors.outline}
+                  />
+                )}
               </TouchableOpacity>
-              {errors.dob ? <Text style={styles.errorText}>{errors.dob}</Text> : null}
+              {errors.dob ? (
+                <Text style={styles.errorText}>{errors.dob}</Text>
+              ) : null}
               {showDobPicker && (
                 <DateTimePicker
                   mode="date"
@@ -1846,12 +869,20 @@ export default function PersonalInformationScreen() {
                   {BLOOD_GROUPS.map((bg) => (
                     <TouchableOpacity
                       key={bg}
-                      style={[styles.bloodChip, form.bloodGroup === bg && styles.bloodChipActive]}
+                      style={[
+                        styles.bloodChip,
+                        form.bloodGroup === bg && styles.bloodChipActive,
+                      ]}
                       onPress={() => isEditing && setField("bloodGroup", bg)}
                       activeOpacity={isEditing ? 0.8 : 1}
                       disabled={!isEditing}
                     >
-                      <Text style={[styles.bloodChipText, form.bloodGroup === bg && styles.bloodChipTextActive]}>
+                      <Text
+                        style={[
+                          styles.bloodChipText,
+                          form.bloodGroup === bg && styles.bloodChipTextActive,
+                        ]}
+                      >
                         {bg}
                       </Text>
                     </TouchableOpacity>
@@ -1864,22 +895,79 @@ export default function PersonalInformationScreen() {
           {/* ── Contact Information ── */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <MaterialIcons name="contact-phone" size={16} color={AmbColors.primary} />
+              <MaterialIcons
+                name="contact-phone"
+                size={16}
+                color={AmbColors.primary}
+              />
               <Text style={styles.sectionTitle}>Contact Information</Text>
             </View>
-            <InputField label="Email Address" field="email" placeholder="alex@example.com" keyboardType="email-address" autoCapitalize="none" required isEditing={isEditing} value={form.email} onChangeText={(v) => setField("email", v)} error={errors.email} />
-            <InputField label="Phone Number" field="phone" placeholder="+91 88765 43210" keyboardType="phone-pad" maxLength={10} required isEditing={isEditing} value={form.phone} onChangeText={(v) => setField("phone", v)} error={errors.phone} />
-            <InputField label="Alt Phone Number" field="altPhone" placeholder="+91 88765 43211" keyboardType="phone-pad" maxLength={10} isEditing={isEditing} value={form.altPhone} onChangeText={(v) => setField("altPhone", v)} error={errors.altPhone} />
+            <InputField
+              label="Email Address"
+              field="email"
+              placeholder="alex@example.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              required
+              isEditing={isEditing}
+              value={form.email}
+              onChangeText={(v) => setField("email", v)}
+              error={errors.email}
+            />
+            <InputField
+              label="Phone Number"
+              field="phone"
+              placeholder="+91 88765 43210"
+              keyboardType="phone-pad"
+              maxLength={10}
+              required
+              isEditing={isEditing}
+              value={form.phone}
+              onChangeText={(v) => setField("phone", v)}
+              error={errors.phone}
+            />
+            <InputField
+              label="Alt Phone Number"
+              field="altPhone"
+              placeholder="+91 88765 43211"
+              keyboardType="phone-pad"
+              maxLength={10}
+              isEditing={isEditing}
+              value={form.altPhone}
+              onChangeText={(v) => setField("altPhone", v)}
+              error={errors.altPhone}
+            />
           </View>
 
           {/* ── Residential Address ── */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <MaterialIcons name="location-on" size={16} color={AmbColors.primary} />
+              <MaterialIcons
+                name="location-on"
+                size={16}
+                color={AmbColors.primary}
+              />
               <Text style={styles.sectionTitle}>Residential Address</Text>
             </View>
-            <InputField label="Address Line 1" field="addr1" placeholder="42, Emerald Heights Residency" required isEditing={isEditing} value={form.addr1} onChangeText={(v) => setField("addr1", v)} error={errors.addr1} />
-            <InputField label="Address Line 2" field="addr2" placeholder="Near Central Park, Sector 15" isEditing={isEditing} value={form.addr2} onChangeText={(v) => setField("addr2", v)} error={errors.addr2} />
+            <InputField
+              label="Address Line 1"
+              field="addr1"
+              placeholder="42, Emerald Heights Residency"
+              required
+              isEditing={isEditing}
+              value={form.addr1}
+              onChangeText={(v) => setField("addr1", v)}
+              error={errors.addr1}
+            />
+            <InputField
+              label="Address Line 2"
+              field="addr2"
+              placeholder="Near Central Park, Sector 15"
+              isEditing={isEditing}
+              value={form.addr2}
+              onChangeText={(v) => setField("addr2", v)}
+              error={errors.addr2}
+            />
 
             <View style={{ zIndex: 9999 }}>
               <View style={fieldStyles.labelRow}>
@@ -1889,7 +977,10 @@ export default function PersonalInformationScreen() {
               {isEditing ? (
                 <>
                   <TextInput
-                    style={[fieldStyles.input, errors.city ? fieldStyles.inputError : null]}
+                    style={[
+                      fieldStyles.input,
+                      errors.city ? fieldStyles.inputError : null,
+                    ]}
                     value={cityQuery}
                     placeholder="Type city name"
                     placeholderTextColor={Colors.light.outline}
@@ -1899,18 +990,34 @@ export default function PersonalInformationScreen() {
                       setForm((p) => ({ ...p, city: text }));
                     }}
                   />
-                  {errors.city && <Text style={fieldStyles.errorText}>{errors.city}</Text>}
+                  {errors.city && (
+                    <Text style={fieldStyles.errorText}>{errors.city}</Text>
+                  )}
                   {cityResults.length > 0 && (
                     <View style={styles.cityDropdown}>
-                      <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={{ maxHeight: 200 }}>
+                      <ScrollView
+                        nestedScrollEnabled
+                        keyboardShouldPersistTaps="handled"
+                        style={{ maxHeight: 200 }}
+                      >
                         {cityResults.map((item) => (
                           <TouchableOpacity
                             key={item.place_id}
                             style={styles.cityDropdownItem}
                             onPress={() => fetchPlaceDetails(item.place_id)}
                           >
-                            <MaterialIcons name="location-on" size={14} color={Colors.light.outline} style={{ marginRight: 6, marginTop: 1 }} />
-                            <Text style={styles.cityDropdownText} numberOfLines={1}>{item.description}</Text>
+                            <MaterialIcons
+                              name="location-on"
+                              size={14}
+                              color={Colors.light.outline}
+                              style={{ marginRight: 6, marginTop: 1 }}
+                            />
+                            <Text
+                              style={styles.cityDropdownText}
+                              numberOfLines={1}
+                            >
+                              {item.description}
+                            </Text>
                           </TouchableOpacity>
                         ))}
                       </ScrollView>
@@ -1934,7 +1041,9 @@ export default function PersonalInformationScreen() {
                 placeholderTextColor={Colors.light.outline}
                 style={[fieldStyles.input, { backgroundColor: "#E5E7EB" }]}
               />
-              {errors.state && <Text style={fieldStyles.errorText}>{errors.state}</Text>}
+              {errors.state && (
+                <Text style={fieldStyles.errorText}>{errors.state}</Text>
+              )}
             </View>
 
             <View style={fieldStyles.wrap}>
@@ -1949,17 +1058,27 @@ export default function PersonalInformationScreen() {
                   placeholder="Enter PIN"
                   placeholderTextColor={Colors.light.outline}
                   maxLength={6}
-                  style={[fieldStyles.input, errors.pin ? fieldStyles.inputError : null]}
+                  style={[
+                    fieldStyles.input,
+                    errors.pin ? fieldStyles.inputError : null,
+                  ]}
                   onChangeText={(text) => {
                     const value = text.replace(/[^0-9]/g, "").slice(0, 6);
                     setForm((p) => ({ ...p, pin: value }));
-                    if (value.length === 6) setErrors((prev) => { const copy = { ...prev }; delete copy.pin; return copy; });
+                    if (value.length === 6)
+                      setErrors((prev) => {
+                        const copy = { ...prev };
+                        delete copy.pin;
+                        return copy;
+                      });
                   }}
                 />
               ) : (
                 <Text style={fieldStyles.valueText}>{form.pin || "—"}</Text>
               )}
-              {errors.pin && <Text style={fieldStyles.errorText}>{errors.pin}</Text>}
+              {errors.pin && (
+                <Text style={fieldStyles.errorText}>{errors.pin}</Text>
+              )}
             </View>
           </View>
 
@@ -1971,20 +1090,26 @@ export default function PersonalInformationScreen() {
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>AADHAAR NUMBER <Text style={styles.required}>*</Text></Text>
-              <View style={[styles.inputWrapper, !isEditing && styles.inputDisabled]}>
+              <Text style={styles.fieldLabel}>AADHAAR NUMBER</Text>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  !isEditing && styles.inputDisabled,
+                ]}
+              >
                 <TextInput
                   style={styles.textInput}
                   placeholder="XXXX XXXX XXXX"
                   placeholderTextColor={`${AmbColors.outline}70`}
                   value={form.adhaarNo}
-                  onChangeText={(v) => setField("adhaarNo", v.replace(/\D/g, "").slice(0, 12))}
+                  onChangeText={(v) =>
+                    setField("adhaarNo", v.replace(/\D/g, "").slice(0, 12))
+                  }
                   editable={isEditing}
                   keyboardType="numeric"
                   maxLength={12}
                 />
               </View>
-              {errors.adhaarNo ? <Text style={styles.errorText}>{errors.adhaarNo}</Text> : null}
             </View>
 
             <DocUploadBox
@@ -1998,20 +1123,32 @@ export default function PersonalInformationScreen() {
             />
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>PAN NUMBER <Text style={styles.required}>*</Text></Text>
-              <View style={[styles.inputWrapper, !isEditing && styles.inputDisabled]}>
+              <Text style={styles.fieldLabel}>PAN NUMBER</Text>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  !isEditing && styles.inputDisabled,
+                ]}
+              >
                 <TextInput
                   style={styles.textInput}
                   placeholder="ABCDE 1234 F"
                   placeholderTextColor={`${AmbColors.outline}70`}
                   value={form.panNo}
-                  onChangeText={(v) => setField("panNo", v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10))}
+                  onChangeText={(v) =>
+                    setField(
+                      "panNo",
+                      v
+                        .toUpperCase()
+                        .replace(/[^A-Z0-9]/g, "")
+                        .slice(0, 10),
+                    )
+                  }
                   editable={isEditing}
                   autoCapitalize="characters"
                   maxLength={10}
                 />
               </View>
-              {errors.panNo ? <Text style={styles.errorText}>{errors.panNo}</Text> : null}
             </View>
 
             <DocUploadBox
@@ -2042,14 +1179,13 @@ export default function PersonalInformationScreen() {
             ) : (
               <MaterialIcons name="check-circle" size={20} color="#fff" />
             )}
-            <Text style={styles.submitBtnText}>{saving ? "Saving..." : "Save Changes"}</Text>
+            <Text style={styles.submitBtnText}>
+              {saving ? "Saving..." : "Save Changes"}
+            </Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {/* ✅ FIX ISSUE 2 — Success Modal
-          Triggered ONLY from the success path inside handleSubmit (after !res.ok check).
-          Closes on OK press. Does NOT fire on validation failure or API error. */}
       <ActionModal
         visible={showSuccessModal}
         title="Profile Updated"
@@ -2059,7 +1195,6 @@ export default function PersonalInformationScreen() {
         onConfirm={() => setShowSuccessModal(false)}
       />
 
-      {/* Image viewer for non-PDF docs */}
       <Modal
         visible={!!viewingImageUri}
         transparent
@@ -2067,7 +1202,10 @@ export default function PersonalInformationScreen() {
         onRequestClose={() => setViewingImageUri(null)}
       >
         <View style={styles.imageViewerOverlay}>
-          <TouchableOpacity style={styles.imageViewerClose} onPress={() => setViewingImageUri(null)}>
+          <TouchableOpacity
+            style={styles.imageViewerClose}
+            onPress={() => setViewingImageUri(null)}
+          >
             <MaterialIcons name="close" size={28} color="#fff" />
           </TouchableOpacity>
           {viewingImageUri && (
@@ -2086,62 +1224,117 @@ export default function PersonalInformationScreen() {
 // ─── Doc Upload Box ───────────────────────────────────────────────────────────
 
 function DocUploadBox({
-  label, uri, base64, isPdf, isEditing, onPick, onView,
+  label,
+  uri,
+  base64,
+  isPdf,
+  isEditing,
+  onPick,
+  onView,
 }: {
-  label: string; uri: string | null; base64: string | null;
-  isPdf: boolean; isEditing: boolean; onPick: () => void; onView?: () => void;
+  label: string;
+  uri: string | null;
+  base64: string | null;
+  isPdf: boolean;
+  isEditing: boolean;
+  onPick: () => void;
+  onView?: () => void;
 }) {
   const hasDoc = !!(uri || base64);
-  const imageSource = (!isPdf && uri)
-    ? { uri }
-    : (!isPdf && base64)
-      ? { uri: `data:image/jpeg;base64,${base64}` }
-      : null;
+  const imageSource =
+    !isPdf && uri
+      ? { uri }
+      : !isPdf && base64
+        ? { uri: `data:image/jpeg;base64,${base64}` }
+        : null;
 
   const handlePress = () => {
-    if (hasDoc && !isEditing && onView) { onView(); }
-    else if (isEditing) { onPick(); }
+    if (hasDoc && !isEditing && onView) {
+      onView();
+    } else if (isEditing) {
+      onPick();
+    }
   };
 
   return (
     <TouchableOpacity
       style={[styles.docBox, hasDoc && styles.docBoxDone]}
       onPress={handlePress}
-      activeOpacity={(isEditing || (hasDoc && onView)) ? 0.8 : 1}
+      activeOpacity={isEditing || (hasDoc && onView) ? 0.8 : 1}
       disabled={!isEditing && !(hasDoc && onView)}
     >
       {hasDoc ? (
         imageSource ? (
-          <Image source={imageSource} style={styles.docThumb} resizeMode="cover" />
+          <Image
+            source={imageSource}
+            style={styles.docThumb}
+            resizeMode="cover"
+          />
         ) : (
           <View style={styles.docPdfBadge}>
-            <MaterialIcons name="picture-as-pdf" size={28} color={AmbColors.error} />
+            <MaterialIcons
+              name="picture-as-pdf"
+              size={28}
+              color={AmbColors.error}
+            />
             <Text style={styles.docPdfText}>PDF — Tap to view</Text>
           </View>
         )
       ) : (
         <View style={styles.docPlaceholder}>
-          <MaterialIcons name="upload-file" size={28} color={`${AmbColors.outline}60`} />
-          <Text style={styles.docPlaceholderText}>{isEditing ? `Upload ${label}` : `No ${label}`}</Text>
+          <MaterialIcons
+            name="upload-file"
+            size={28}
+            color={`${AmbColors.outline}60`}
+          />
+          <Text style={styles.docPlaceholderText}>
+            {isEditing ? `Upload ${label}` : `No ${label}`}
+          </Text>
         </View>
       )}
-      <View style={styles.docLabelRow}>
+      {/* <View style={styles.docLabelRow}>
         <Text style={styles.docLabel}>{label}</Text>
-        {hasDoc && <MaterialIcons name="check-circle" size={14} color={AmbColors.tertiary} />}
-        {isEditing && !hasDoc && <MaterialIcons name="add" size={14} color={AmbColors.outline} />}
-      </View>
+        {hasDoc && (
+          <MaterialIcons
+            name="check-circle"
+            size={14}
+            color={AmbColors.tertiary}
+          />
+        )}
+        {isEditing && !hasDoc && (
+          <MaterialIcons name="add" size={14} color={AmbColors.outline} />
+        )}
+      </View> */}
     </TouchableOpacity>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const fieldStyles = StyleSheet.create({
   wrap: { marginBottom: Spacing.sm },
-  labelRow: { flexDirection: "row", alignItems: "center", gap: 3, marginBottom: 4 },
-  label: { fontFamily: FontFamily.bodyMedium, fontSize: FontSize.labelMedium, color: Colors.light.onSurfaceVariant },
-  requiredStar: { color: Colors.light.error, fontSize: FontSize.labelMedium, fontFamily: FontFamily.bodyMedium },
-  errorText: { color: Colors.light.error, fontSize: FontSize.labelSmall, fontFamily: FontFamily.body, marginTop: 4 },
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    marginBottom: 4,
+  },
+  label: {
+    fontFamily: FontFamily.bodyMedium,
+    fontSize: FontSize.labelMedium,
+    color: Colors.light.onSurfaceVariant,
+  },
+  requiredStar: {
+    color: Colors.light.error,
+    fontSize: FontSize.labelMedium,
+    fontFamily: FontFamily.bodyMedium,
+  },
+  errorText: {
+    color: Colors.light.error,
+    fontSize: FontSize.labelSmall,
+    fontFamily: FontFamily.body,
+    marginTop: 4,
+  },
   input: {
     backgroundColor: AmbColors.surfaceContainerLow,
     borderRadius: AmbRadius.md,
@@ -2153,32 +1346,62 @@ const fieldStyles = StyleSheet.create({
     color: AmbColors.onSurface,
   },
   inputError: { borderWidth: 1, borderColor: Colors.light.error },
-  valueText: { fontFamily: FontFamily.body, fontSize: FontSize.bodyMedium, color: Colors.light.onSurface, paddingVertical: 6 },
+  valueText: {
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.bodyMedium,
+    color: Colors.light.onSurface,
+    paddingVertical: 6,
+  },
 });
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: AmbColors.surface },
   scroll: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20 },
 
-  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
-  loadingText: { fontFamily: "Inter_400Regular", fontSize: 14, color: AmbColors.secondary },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 12,
+  },
+  loadingText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    color: AmbColors.secondary,
+  },
 
   cityDropdown: {
-    position: "absolute", top: 52, left: 0, right: 0,
-    backgroundColor: "#fff", borderRadius: Radius.lg,
-    elevation: 10, shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, zIndex: 9999,
+    position: "absolute",
+    top: 52,
+    left: 0,
+    right: 0,
+    backgroundColor: "#fff",
+    borderRadius: Radius.lg,
+    elevation: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    zIndex: 9999,
   },
   cityDropdownItem: {
-    flexDirection: "row", alignItems: "flex-start",
-    paddingHorizontal: Spacing.md, paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: Colors.light.outlineVariant,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.outlineVariant,
   },
-  cityDropdownText: { flex: 1, fontFamily: FontFamily.body, fontSize: FontSize.bodySmall, color: Colors.light.onSurface },
+  cityDropdownText: {
+    flex: 1,
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.bodySmall,
+    color: Colors.light.onSurface,
+  },
 
   editBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     height: 34,
     paddingHorizontal: 12,
@@ -2186,87 +1409,269 @@ const styles = StyleSheet.create({
     backgroundColor: `${AmbColors.primary}15`,
   },
   editBtnActive: { backgroundColor: `${AmbColors.error}15` },
-  editBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: AmbColors.primary },
+  editBtnText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+    color: AmbColors.primary,
+  },
   editBtnTextActive: { color: AmbColors.error },
 
   heroCard: {
-    backgroundColor: AmbColors.surfaceContainerLowest, borderRadius: AmbRadius.xl,
-    padding: 24, marginBottom: 14, alignItems: "center", gap: 6, ...AmbShadow.subtle,
+    backgroundColor: AmbColors.surfaceContainerLowest,
+    borderRadius: AmbRadius.xl,
+    padding: 24,
+    marginBottom: 14,
+    alignItems: "center",
+    gap: 6,
+    ...AmbShadow.subtle,
   },
   photoCircle: {
-    width: 100, height: 100, borderRadius: 50,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     backgroundColor: AmbColors.primaryFixed,
-    justifyContent: "center", alignItems: "center",
-    marginBottom: 4, overflow: "hidden",
-    borderWidth: 3, borderColor: AmbColors.surfaceContainerLow, ...AmbShadow.card,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 4,
+    overflow: "hidden",
+    borderWidth: 3,
+    borderColor: AmbColors.surfaceContainerLow,
+    ...AmbShadow.card,
   },
   photoImage: { width: 100, height: 100 },
-  photoInitials: { fontFamily: "Inter_600SemiBold", fontSize: 32, color: AmbColors.primary },
-  photoBadge: {
-    position: "absolute", bottom: 0, right: 0,
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: AmbColors.primary,
-    justifyContent: "center", alignItems: "center",
-    borderWidth: 2, borderColor: "#fff",
+  photoInitials: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 32,
+    color: AmbColors.primary,
   },
-  heroName: { fontFamily: "Inter_600SemiBold", fontSize: 18, color: AmbColors.onSurface },
-  heroId: { fontFamily: "Inter_400Regular", fontSize: 12, color: AmbColors.secondary },
+  photoBadge: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: AmbColors.primary,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  heroName: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 18,
+    color: AmbColors.onSurface,
+  },
+  heroId: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: AmbColors.secondary,
+  },
 
   section: {
-    backgroundColor: AmbColors.surfaceContainerLowest, borderRadius: AmbRadius.xl,
-    padding: 20, marginBottom: 14, gap: 14, ...AmbShadow.subtle,
+    backgroundColor: AmbColors.surfaceContainerLowest,
+    borderRadius: AmbRadius.xl,
+    padding: 20,
+    marginBottom: 14,
+    gap: 14,
+    ...AmbShadow.subtle,
   },
-  sectionHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 2 },
-  sectionTitle: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: AmbColors.onSurface },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 2,
+  },
+  sectionTitle: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 15,
+    color: AmbColors.onSurface,
+  },
 
   fieldGroup: { gap: 6 },
-  fieldLabel: { fontFamily: "Inter_600SemiBold", fontSize: 10, color: AmbColors.onSurfaceVariant, letterSpacing: 1, textTransform: "uppercase" },
+  fieldLabel: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 10,
+    color: AmbColors.onSurfaceVariant,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
   required: { color: AmbColors.error },
-  inputWrapper: { backgroundColor: AmbColors.surfaceContainerLow, borderRadius: AmbRadius.md, height: 50, justifyContent: "center", paddingHorizontal: 14 },
-  inputDisabled: { backgroundColor: AmbColors.surfaceContainerHighest, opacity: 0.75 },
-  textInput: { fontFamily: "Inter_400Regular", fontSize: 14, color: AmbColors.onSurface },
-  errorText: { fontFamily: "Inter_400Regular", fontSize: 11, color: AmbColors.error },
+  inputWrapper: {
+    backgroundColor: AmbColors.surfaceContainerLow,
+    borderRadius: AmbRadius.md,
+    height: 50,
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  inputDisabled: {
+    backgroundColor: AmbColors.surfaceContainerHighest,
+    opacity: 0.75,
+  },
+  textInput: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    color: AmbColors.onSurface,
+  },
+  errorText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 11,
+    color: AmbColors.error,
+  },
 
   dateRow: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    backgroundColor: AmbColors.surfaceContainerLow, borderRadius: AmbRadius.md,
-    height: 50, paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: AmbColors.surfaceContainerLow,
+    borderRadius: AmbRadius.md,
+    height: 50,
+    paddingHorizontal: 14,
   },
-  dateText: { flex: 1, fontFamily: "Inter_400Regular", fontSize: 14, color: AmbColors.onSurface },
+  dateText: {
+    flex: 1,
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    color: AmbColors.onSurface,
+  },
   datePlaceholder: { color: `${AmbColors.outline}70` },
 
   chipRow: { flexDirection: "row", gap: 8 },
-  optChip: { paddingHorizontal: 18, paddingVertical: 9, borderRadius: AmbRadius.pill, backgroundColor: AmbColors.surfaceContainerLow, borderWidth: 1, borderColor: AmbColors.outlineVariant },
-  optChipActive: { backgroundColor: AmbColors.primary, borderColor: AmbColors.primary },
-  optChipText: { fontFamily: "Inter_500Medium", fontSize: 13, color: AmbColors.onSurfaceVariant },
+  optChip: {
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: AmbRadius.pill,
+    backgroundColor: AmbColors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: AmbColors.outlineVariant,
+  },
+  optChipActive: {
+    backgroundColor: AmbColors.primary,
+    borderColor: AmbColors.primary,
+  },
+  optChipText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 13,
+    color: AmbColors.onSurfaceVariant,
+  },
   optChipTextActive: { color: "#fff" },
 
-  bloodChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: AmbRadius.pill, backgroundColor: AmbColors.surfaceContainerLow, borderWidth: 1, borderColor: AmbColors.outlineVariant },
-  bloodChipActive: { backgroundColor: AmbColors.primaryContainer, borderColor: AmbColors.primaryContainer },
-  bloodChipText: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: AmbColors.onSurfaceVariant },
+  bloodChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: AmbRadius.pill,
+    backgroundColor: AmbColors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: AmbColors.outlineVariant,
+  },
+  bloodChipActive: {
+    backgroundColor: AmbColors.primaryContainer,
+    borderColor: AmbColors.primaryContainer,
+  },
+  bloodChipText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 12,
+    color: AmbColors.onSurfaceVariant,
+  },
   bloodChipTextActive: { color: "#fff" },
 
-  docBox: { borderWidth: 1.5, borderStyle: "dashed", borderColor: AmbColors.outlineVariant, borderRadius: AmbRadius.md, overflow: "hidden", backgroundColor: AmbColors.surfaceContainerLow, minHeight: 120 },
-  docBoxDone: { borderStyle: "solid", borderColor: AmbColors.tertiary, backgroundColor: `${AmbColors.tertiary}08` },
+  docBox: {
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: AmbColors.outlineVariant,
+    borderRadius: AmbRadius.md,
+    overflow: "hidden",
+    backgroundColor: AmbColors.surfaceContainerLow,
+    minHeight: 120,
+  },
+  docBoxDone: {
+    borderStyle: "solid",
+    borderColor: AmbColors.tertiary,
+    backgroundColor: `${AmbColors.tertiary}08`,
+  },
   docThumb: { width: "100%", height: 100 },
-  docPdfBadge: { height: 90, justifyContent: "center", alignItems: "center", gap: 6 },
-  docPdfText: { fontFamily: "Inter_500Medium", fontSize: 12, color: AmbColors.error },
-  docPlaceholder: { height: 90, justifyContent: "center", alignItems: "center", gap: 6 },
-  docPlaceholderText: { fontFamily: "Inter_500Medium", fontSize: 12, color: `${AmbColors.outline}80` },
-  docLabelRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: 1, borderTopColor: AmbColors.surfaceContainerHigh },
-  docLabel: { fontFamily: "Inter_500Medium", fontSize: 12, color: AmbColors.onSurfaceVariant },
+  docPdfBadge: {
+    height: 90,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
+  },
+  docPdfText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 12,
+    color: AmbColors.error,
+  },
+  docPlaceholder: {
+    height: 90,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
+  },
+  docPlaceholderText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 12,
+    color: `${AmbColors.outline}80`,
+  },
+  docLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: AmbColors.surfaceContainerHigh,
+  },
+  docLabel: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 12,
+    color: AmbColors.onSurfaceVariant,
+  },
 
   footer: {
-    position: "absolute", bottom: 0, left: 0, right: 0,
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: AmbColors.surfaceContainerLowest,
-    paddingHorizontal: 20, paddingTop: 14, paddingBottom: 24,
-    borderTopLeftRadius: 24, borderTopRightRadius: 24, ...AmbShadow.elevated,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 24,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    ...AmbShadow.elevated,
   },
-  submitBtn: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 10, height: 54, backgroundColor: AmbColors.primary, borderRadius: AmbRadius.md, ...AmbShadow.card },
+  submitBtn: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 10,
+    height: 54,
+    backgroundColor: AmbColors.primary,
+    borderRadius: AmbRadius.md,
+    ...AmbShadow.card,
+  },
   submitBtnDisabled: { opacity: 0.6 },
-  submitBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 16, color: "#ffffff" },
+  submitBtnText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 16,
+    color: "#ffffff",
+  },
 
-  imageViewerOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.92)", justifyContent: "center", alignItems: "center" },
-  imageViewerClose: { position: "absolute", top: 48, right: 20, zIndex: 10, padding: 8 },
-  imageViewerImg: { width: Dimensions.get("window").width, height: Dimensions.get("window").height * 0.75 },
+  imageViewerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  imageViewerClose: {
+    position: "absolute",
+    top: 48,
+    right: 20,
+    zIndex: 10,
+    padding: 8,
+  },
+  imageViewerImg: {
+    width: Dimensions.get("window").width,
+    height: Dimensions.get("window").height * 0.75,
+  },
 });
