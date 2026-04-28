@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -6,147 +6,224 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { router } from 'expo-router';
-import { AmbColors, AmbRadius, AmbShadow } from '@/src/features/ambulance/constants/ambulanceTheme';
+  ActivityIndicator,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { router } from "expo-router";
+import {
+  AmbColors,
+  AmbRadius,
+  AmbShadow,
+} from "@/src/features/ambulance/constants/ambulanceTheme";
 import { AuthContext } from "@/src/core/context/AuthContext";
+import api from "@/src/core/api/apiClient";
+import { Image } from "expo-image";
+
 const STATS = [
-  { value: '128', label: 'TRIPS', color: AmbColors.primary },
-  { value: '4.9', label: 'RATING', color: AmbColors.tertiary },
-  { value: '5y', label: 'EXP.', color: AmbColors.primaryContainer },
+  { value: "128", label: "TRIPS", color: AmbColors.primary },
+  { value: "4.9", label: "RATING", color: AmbColors.tertiary },
+  { value: "5y", label: "EXP.", color: AmbColors.primaryContainer },
 ];
 
 const NAV_ITEMS = [
   {
-    label: 'Personal Details',
-    sub: 'Contact, address, and bio',
-    icon: 'person' as const,
+    label: "Personal Details",
+    sub: "Contact, address, and bio",
+    icon: "person" as const,
     iconBg: `${AmbColors.primary}15`,
     iconColor: AmbColors.primary,
-    route: '/(ambulance)/personal-information',
+    route: "/(ambulance)/personal-information",
   },
   {
-    label: 'Equipment & Facilities',
-    sub: 'Advanced life support tools',
-    icon: 'medical-services' as const,
+    label: "Equipment & Facilities",
+    sub: "Advanced life support tools",
+    icon: "medical-services" as const,
     iconBg: `${AmbColors.primary}15`,
     iconColor: AmbColors.primary,
-    route: '/(ambulance)/equipment-facilities',
+    route: "/(ambulance)/equipment-facilities",
   },
   {
-    label: 'Bank Details',
-    sub: 'Payouts and tax records',
-    icon: 'account-balance' as const,
+    label: "Bank Details",
+    sub: "Payouts and tax records",
+    icon: "account-balance" as const,
     iconBg: `${AmbColors.primary}15`,
     iconColor: AmbColors.primary,
-    route: '/(ambulance)/bank-details',
+    route: "/(ambulance)/bank-details",
   },
   {
-    label: 'Live Tracking',
-    sub: 'Real-time status updates',
-    icon: 'near-me' as const,
+    label: "Live Tracking",
+    sub: "Real-time status updates",
+    icon: "near-me" as const,
     iconBg: `${AmbColors.tertiary}15`,
     iconColor: AmbColors.tertiary,
-    route: '/(ambulance)/live-tracking',
+    route: "/(ambulance)/live-tracking",
   },
   {
-    label: 'Trips and Bookings',
-    sub: 'View past and future service',
-    icon: 'history' as const,
+    label: "Trips and Bookings",
+    sub: "View past and future service",
+    icon: "history" as const,
     iconBg: `${AmbColors.primary}15`,
     iconColor: AmbColors.primary,
-    route: '/(ambulance)/trips',
+    route: "/(ambulance)/trips",
   },
   {
-    label: 'Driver Assignment',
-    sub: 'Linked ambulance personnel',
-    icon: 'badge' as const,
+    label: "Driver Assignment",
+    sub: "Linked ambulance personnel",
+    icon: "badge" as const,
     iconBg: `${AmbColors.primary}15`,
     iconColor: AmbColors.primary,
-    route: '/(ambulance)/driver-assignment',
+    route: "/(ambulance)/driver-assignment",
   },
 ];
 
 export default function ProfileScreen() {
+  const [name, setName] = useState("");
+  const [city, setCity] = useState("");
+  const [stateName, setStateName] = useState("");
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
   const auth = useContext(AuthContext);
+  const vendorId = auth?.user?.vendorId;
+
+  useEffect(() => {
+    fetchProfile();
+  }, [vendorId]);
+
+  const fetchProfile = async () => {
+    if (!vendorId) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const res = await api.get(
+        `/api/Ambulance/GetAmbulance_Owner_APP/${vendorId}`,
+      );
+
+      console.log("🚑 API Response:", res.data);
+
+      // API returns { status: true, data: [ { vendorId, full_name, city, state, photo, ... } ] }
+      const data = res.data;
+
+      if (data) {
+        setName(data.full_name || "");
+        setCity(data.city || "");
+        setStateName(data.state || "");
+
+        // FIX: photo is a raw base64 string — prefix with data URI scheme so
+        // expo-image can render it. Guard against empty / null values.
+        const img =
+          data.photo && data.photo.trim().length > 0
+            ? `data:image/jpeg;base64,${data.photo}`
+            : null;
+
+        setProfileImage(img);
+      }
+    } catch (err) {
+      console.log("API Error:", err);
+    }
+
+    setLoading(false);
+  };
+
+  function getInitials(name: string) {
+    if (!name) return "A";
+    const words = name.trim().split(" ");
+    if (words.length === 1) return words[0][0].toUpperCase();
+    return (words[0][0] + words[1][0]).toUpperCase();
+  }
+
   const handleNavPress = (route: string | null) => {
     if (route) {
       router.push(route as any);
     } else {
-      Alert.alert('Coming Soon', 'This section will be available soon.');
+      Alert.alert("Coming Soon", "This section will be available soon.");
     }
   };
- const handleSignOut = async () => {
+
+  const handleSignOut = async () => {
     await auth?.logout();
   };
+
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* ── Profile hero ─────────────────────────────────────────────── */}
+    <SafeAreaView style={styles.safe} edges={["top"]}>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        {/* HERO */}
         <View style={styles.heroSection}>
-          {/* Avatar with edit button */}
           <View style={styles.avatarWrapper}>
             <View style={styles.avatarCircle}>
-              <Text style={styles.avatarInitials}>AS</Text>
+              {loading ? (
+                <ActivityIndicator />
+              ) : profileImage ? (
+                // FIX 1: expo-image requires source={{ uri }} — a bare string is not valid
+                // FIX 2: avatarImage style was referenced but never defined (invisible image)
+                <Image
+                  source={{ uri: profileImage }}
+                  style={styles.avatarImage}
+                  contentFit="cover"
+                />
+              ) : (
+                <Text style={styles.avatarInitials}>{getInitials(name)}</Text>
+              )}
             </View>
-            <TouchableOpacity style={styles.editBtn} activeOpacity={0.8}>
-              <MaterialIcons name="edit" size={14} color="#fff" />
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.profileName}>Dr. Aranya Sen</Text>
-          <Text style={styles.profileRole}>Senior Emergency Lead</Text>
 
-          {/* Stats grid */}
-          <View style={styles.statsRow}>
-            {STATS.map((s, i) => (
-              <View key={i} style={styles.statCard}>
-                <Text style={[styles.statValue, { color: s.color }]}>{s.value}</Text>
-                <Text style={styles.statLabel}>{s.label}</Text>
-              </View>
-            ))}
+            {/* <TouchableOpacity style={styles.editBtn}>
+              <MaterialIcons name="edit" size={14} color="#fff" />
+            </TouchableOpacity> */}
           </View>
+
+          {/* Full name from API */}
+          <Text style={styles.profileName}>
+            {loading ? "Loading..." : name || "Ambulance Owner"}
+          </Text>
+
+          {/* City + State from API */}
+          <Text style={styles.profileRole}>
+            {loading
+              ? ""
+              : city || stateName
+                ? `${city}, ${stateName}`
+                : "Ambulance Owner"}
+          </Text>
         </View>
 
-        {/* ── Navigation hub ────────────────────────────────────────────── */}
+        {/* NAV */}
         <View style={styles.navList}>
           {NAV_ITEMS.map((item, i) => (
             <TouchableOpacity
               key={i}
               style={[styles.navItem, AmbShadow.card]}
               onPress={() => handleNavPress(item.route)}
-              activeOpacity={0.8}
             >
-              <View style={[styles.navIconBox, { backgroundColor: item.iconBg }]}>
-                <MaterialIcons name={item.icon} size={22} color={item.iconColor} />
+              <View
+                style={[styles.navIconBox, { backgroundColor: item.iconBg }]}
+              >
+                <MaterialIcons
+                  name={item.icon}
+                  size={22}
+                  color={item.iconColor}
+                />
               </View>
+
               <View style={styles.navTextBlock}>
                 <Text style={styles.navLabel}>{item.label}</Text>
                 <Text style={styles.navSub}>{item.sub}</Text>
               </View>
-              <MaterialIcons
-                name="chevron-right"
-                size={20}
-                color={`${AmbColors.secondary}66`}
-              />
+
+              <MaterialIcons name="chevron-right" size={20} />
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* ── Logout ───────────────────────────────────────────────────── */}
+        {/* LOGOUT */}
         <View style={styles.dangerZone}>
-          <TouchableOpacity style={styles.logoutBtn} activeOpacity={0.7} onPress={handleSignOut}>
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleSignOut}>
             <MaterialIcons name="logout" size={16} color={AmbColors.error} />
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
-          <Text style={styles.versionText}>APP VERSION 2.4.0 (BUILD 501)</Text>
         </View>
-
-        <View style={{ height: 24 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -158,13 +235,13 @@ const styles = StyleSheet.create({
 
   // Hero
   heroSection: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingTop: 10,
     paddingBottom: 24,
     paddingHorizontal: 24,
   },
   avatarWrapper: {
-    position: 'relative',
+    position: "relative",
     marginBottom: 16,
   },
   avatarCircle: {
@@ -172,41 +249,48 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
     backgroundColor: AmbColors.primaryFixed,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     borderWidth: 4,
     borderColor: AmbColors.surfaceContainerLow,
     marginBottom: 10,
     ...AmbShadow.elevated,
   },
+  // FIX: was referenced in JSX but missing from StyleSheet entirely —
+  // without explicit dimensions the image renders as 0×0 (invisible).
+  avatarImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+  },
   avatarInitials: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: "Inter_600SemiBold",
     fontSize: 36,
     color: AmbColors.primary,
     lineHeight: 42,
   },
   editBtn: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 2,
     right: 2,
     width: 32,
     height: 32,
     borderRadius: 16,
     backgroundColor: AmbColors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: "#fff",
   },
   profileName: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: "Inter_600SemiBold",
     fontSize: 22,
     color: AmbColors.onSurface,
     marginBottom: 4,
     lineHeight: 28,
   },
   profileRole: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "Inter_500Medium",
     fontSize: 13,
     color: AmbColors.secondary,
     letterSpacing: 0.3,
@@ -216,11 +300,11 @@ const styles = StyleSheet.create({
 
   // Stats
   statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'stretch',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "stretch",
     gap: 11,
-    width: '100%',
+    width: "100%",
   },
   statCard: {
     flex: 1,
@@ -228,33 +312,33 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 12,
     borderRadius: AmbRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     minHeight: 84,
     gap: 5,
   },
   statValue: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: "Inter_600SemiBold",
     fontSize: 18,
     lineHeight: 24,
-    textAlign: 'center',
+    textAlign: "center",
   },
   statLabel: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: "Inter_600SemiBold",
     fontSize: 9,
     color: AmbColors.secondary,
     letterSpacing: 1,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     marginTop: 2,
-    textAlign: 'center',
+    textAlign: "center",
   },
 
   // Nav hub
   navList: { paddingHorizontal: 20, gap: 10, marginBottom: 14 },
   navItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     minHeight: 60,
     paddingVertical: 14,
     paddingHorizontal: 16,
@@ -266,20 +350,20 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: AmbRadius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     flexShrink: 0,
   },
-  navTextBlock: { flex: 1, justifyContent: 'center', gap: 1 },
+  navTextBlock: { flex: 1, justifyContent: "center", gap: 1 },
   navLabel: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: "Inter_600SemiBold",
     fontSize: 14,
     color: AmbColors.onSurface,
     marginBottom: 0,
     lineHeight: 20,
   },
   navSub: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: "Inter_400Regular",
     fontSize: 11,
     color: AmbColors.secondary,
     marginTop: 0,
@@ -287,11 +371,16 @@ const styles = StyleSheet.create({
   },
 
   // Logout
-  dangerZone: { alignItems: 'center', marginTop: 36, marginBottom: 24, paddingHorizontal: 24 },
+  dangerZone: {
+    alignItems: "center",
+    marginTop: 36,
+    marginBottom: 24,
+    paddingHorizontal: 24,
+  },
   logoutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     minHeight: 48,
     paddingVertical: 12,
@@ -299,19 +388,19 @@ const styles = StyleSheet.create({
     borderRadius: AmbRadius.pill,
   },
   logoutText: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: "Inter_600SemiBold",
     fontSize: 14,
     color: AmbColors.error,
     lineHeight: 20,
-    textAlign: 'center',
+    textAlign: "center",
   },
   versionText: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "Inter_500Medium",
     fontSize: 9,
     color: `${AmbColors.secondary}80`,
     letterSpacing: 2,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     marginTop: 16,
-    textAlign: 'center',
+    textAlign: "center",
   },
 });
