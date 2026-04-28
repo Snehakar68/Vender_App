@@ -39,8 +39,11 @@ import {
   PersonalFormState,
 } from "@/src/shared/utils/validation";
 import ActionModal from "@/src/shared/components/ActionModal";
+import { AmbColors, AmbRadius } from "@/src/features/ambulance/constants/ambulanceTheme";
 
 const MIN_IMAGES = 3;
+// ── FIX (Issue 2): Hard cap at 3 images — only 3 slots ever rendered ─────────
+const MAX_IMAGES = 3;
 const MAX_IMAGE_BYTES = 200 * 1024; // 200 KB
 
 const IMAGES_CACHE_KEY = "@jhilmil/hospital_images_v2";
@@ -83,13 +86,14 @@ export default function PersonalDetailsScreen() {
   const [cityQuery, setCityQuery] = useState("");
   const [cityResults, setCityResults] = useState<any[]>([]);
   const [citySelected, setCitySelected] = useState(false);
+  const [cityTyping, setCityTyping] = useState(false);
 
   useEffect(() => {
     setCityQuery(form.city);
   }, [form.city]);
 
   useEffect(() => {
-    if (citySelected || !isEditing || cityQuery.length < 2) {
+    if (citySelected || !isEditing || !cityTyping || cityQuery.length < 2) {
       setCityResults([]);
       return;
     }
@@ -105,7 +109,7 @@ export default function PersonalDetailsScreen() {
       }
     }, 400);
     return () => clearTimeout(timer);
-  }, [cityQuery, isEditing, citySelected]);
+  }, [cityQuery, isEditing, citySelected, cityTyping]);
 
   const fetchPlaceDetails = async (placeId: string) => {
     setCitySelected(true);
@@ -116,16 +120,25 @@ export default function PersonalDetailsScreen() {
       );
       const data = await res.json();
       const details = data.result;
-      let city = "", state = "", pin = "";
+      let city = "",
+        state = "",
+        pin = "";
       details.address_components.forEach((comp: any) => {
         const types = comp.types;
         if (types.includes("locality")) city = comp.long_name;
-        if (!city && types.includes("administrative_area_level_2")) city = comp.long_name;
-        if (types.includes("administrative_area_level_1")) state = comp.long_name;
+        if (!city && types.includes("administrative_area_level_2"))
+          city = comp.long_name;
+        if (types.includes("administrative_area_level_1"))
+          state = comp.long_name;
         if (types.includes("postal_code")) pin = comp.long_name;
       });
       setCityQuery(city);
-      setForm((prev) => ({ ...prev, city, state, ...(pin ? { pinCode: pin } : {}) }));
+      setForm((prev) => ({
+        ...prev,
+        city,
+        state,
+        ...(pin ? { pinCode: pin } : {}),
+      }));
       setErrors((prev) => {
         const copy = { ...prev };
         delete copy.city;
@@ -143,6 +156,7 @@ export default function PersonalDetailsScreen() {
     setLoading(true);
     try {
       // 1. Show cached images immediately
+      let hadCache = false;
       try {
         const cached = await AsyncStorage.getItem(IMAGES_CACHE_KEY);
         if (cached) {
@@ -150,12 +164,15 @@ export default function PersonalDetailsScreen() {
           if (parsed.length > 0) {
             setImages(parsed);
             setOriginalImages(parsed);
+            hadCache = true; // ── FIX (Issue 1): track that a local cache exists
           }
         }
       } catch (_) {}
 
       // 2. Fetch profile from API
-      const res = await api.get(`/api/Hospital/GetHosPersonnelInfoById/${vendorId}`);
+      const res = await api.get(
+        `/api/Hospital/GetHosPersonnelInfoById/${vendorId}`,
+      );
       const apiData = res.data?.data?.hospital;
 
       const loaded: PersonalFormState = {
@@ -177,7 +194,19 @@ export default function PersonalDetailsScreen() {
       setOriginalForm(loaded);
       setCityQuery(loaded.city);
 
-      // 3. Use API images only if server returned them (avoid wiping cache with empty)
+      // ── FIX (Issue 1): Only seed images from API when NO local cache exists.
+      //
+      // Previously the code unconditionally overwrote IMAGES_CACHE_KEY with
+      // whatever the API returned. Because the server often returns stale /
+      // empty photos immediately after a PUT, every navigation back to this
+      // screen wiped the freshly uploaded images from cache.
+      //
+      // New rule:
+      //   • If a local cache already exists  → trust it, ignore API images.
+      //   • If no cache exists yet (first run / fresh install) → seed from API.
+      //
+      // The cache is always written by handleUpdate after a successful save,
+      // so it will always reflect the latest uploaded images going forward.
       const rawPhotos: any[] = Array.isArray(res.data?.data?.photos)
         ? res.data.data.photos
         : [];
@@ -185,17 +214,20 @@ export default function PersonalDetailsScreen() {
         .filter((img): img is string => typeof img === "string" && img.trim().length > 0)
         .map((img) => (img.startsWith("data:") ? img : `data:image/jpeg;base64,${img}`));
 
-      if (apiImages.length > 0) {
+      if (apiImages.length > 0 && !hadCache) {
+        // No local cache — use API images as initial seed only
         setImages(apiImages);
         setOriginalImages(apiImages);
         await AsyncStorage.setItem(IMAGES_CACHE_KEY, JSON.stringify(apiImages));
       }
+      // If hadCache === true we deliberately skip the API images so the
+      // locally saved (freshly uploaded) images are never overwritten.
 
       await AsyncStorage.setItem(
         HOSPITAL_PROFILE_KEY,
         JSON.stringify({
           hospitalName: loaded.hospitalName,
-          profileImage: apiImages[0] ?? null,
+          profileImage: (hadCache ? images[0] : apiImages[0]) ?? null,
         }),
       );
     } catch (e) {
@@ -219,7 +251,12 @@ export default function PersonalDetailsScreen() {
   // ── Helpers ───────────────────────────────────────────────────────────────
   function update(key: keyof PersonalFormState, val: string) {
     setForm((prev) => ({ ...prev, [key]: val }));
-    if (errors[key]) setErrors((prev) => { const n = { ...prev }; delete n[key]; return n; });
+    if (errors[key])
+      setErrors((prev) => {
+        const n = { ...prev };
+        delete n[key];
+        return n;
+      });
   }
 
   function showStatus(text: string, ok: boolean) {
@@ -233,6 +270,7 @@ export default function PersonalDetailsScreen() {
     setErrors({});
     setCitySelected(false);
     setCityResults([]);
+    setCityTyping(false);
     setIsEditing(true);
   }
 
@@ -243,6 +281,7 @@ export default function PersonalDetailsScreen() {
     setCityQuery(originalForm.city);
     setCitySelected(false);
     setCityResults([]);
+    setCityTyping(false);
     setIsEditing(false);
   }
 
@@ -362,6 +401,8 @@ export default function PersonalDetailsScreen() {
   };
 
   const promptImageSource = (index: number) => {
+    // ── FIX (Issue 2): Guard — never allow more than MAX_IMAGES ──────────────
+    if (index >= MAX_IMAGES) return;
     Alert.alert("Add Hospital Photo", "Choose source", [
       { text: "Camera", onPress: () => pickImageFromCamera(index) },
       { text: "Gallery", onPress: () => pickImageFromGallery(index) },
@@ -450,28 +491,50 @@ export default function PersonalDetailsScreen() {
     );
   }
 
-  const imageSlots = Math.max(images.length, MIN_IMAGES);
+  // ── FIX (Issue 2): Always exactly MAX_IMAGES (3) slots — never grows beyond ─
+  const imageSlots = MAX_IMAGES;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
-          <MaterialIcons name="arrow-back" size={24} color={Colors.light.onSurface} />
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backBtn}
+          activeOpacity={0.7}
+        >
+          <MaterialIcons
+            name="arrow-back"
+            size={24}
+            color={Colors.light.onSurface}
+          />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Personal Details</Text>
         {isEditing ? (
-          <TouchableOpacity onPress={handleCancel} style={styles.editBtn} activeOpacity={0.7}>
-            <Text style={[styles.editBtnText, { color: Colors.light.error }]}>Cancel</Text>
+          <TouchableOpacity
+            onPress={handleCancel}
+            style={styles.editBtn}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.editBtnText, { color: Colors.light.error }]}>
+              Cancel
+            </Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity onPress={handleEdit} style={styles.editBtn} activeOpacity={0.7}>
+          <TouchableOpacity
+            onPress={handleEdit}
+            style={styles.editBtn}
+            activeOpacity={0.7}
+          >
             <Text style={styles.editBtnText}>Edit</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
@@ -482,12 +545,31 @@ export default function PersonalDetailsScreen() {
           {/* BASIC INFORMATION */}
           <Text style={styles.sectionLabel}>BASIC INFORMATION</Text>
           <View style={[styles.section, { zIndex: 9999 }]}>
-            <InputField label="Hospital Name" value={form.hospitalName} onChangeText={(v) => update("hospitalName", v)} editable={isEditing} required error={errors.hospitalName} />
-            <InputField label="Address Line 1" value={form.addressLine1} onChangeText={(v) => update("addressLine1", v)} editable={isEditing} required error={errors.addressLine1} />
-            <InputField label="Address Line 2" value={form.addressLine2} onChangeText={(v) => update("addressLine2", v)} editable={isEditing} />
+            <InputField
+              label="Hospital Name"
+              value={form.hospitalName}
+              onChangeText={(v) => update("hospitalName", v)}
+              editable={isEditing}
+              required
+              error={errors.hospitalName}
+            />
+            <InputField
+              label="Address Line 1"
+              value={form.addressLine1}
+              onChangeText={(v) => update("addressLine1", v)}
+              editable={isEditing}
+              required
+              error={errors.addressLine1}
+            />
+            <InputField
+              label="Address Line 2"
+              value={form.addressLine2}
+              onChangeText={(v) => update("addressLine2", v)}
+              editable={isEditing}
+            />
 
             {/* City */}
-            <View style={{ zIndex: 9999 }}>
+           <View style={{ zIndex: 9999 }}>
               <View style={fieldStyles.labelRow}>
                 <Text style={fieldStyles.label}>City</Text>
                 <Text style={fieldStyles.requiredStar}>*</Text>
@@ -495,20 +577,48 @@ export default function PersonalDetailsScreen() {
               {isEditing ? (
                 <>
                   <TextInput
-                    style={[fieldStyles.input, errors.city ? fieldStyles.inputError : null]}
+                    style={[
+                      fieldStyles.input,
+                      errors.city ? fieldStyles.inputError : null,
+                    ]}
                     value={cityQuery}
                     placeholder="Type city name"
                     placeholderTextColor={Colors.light.outline}
-                    onChangeText={(text) => { setCitySelected(false); setCityQuery(text); setForm((p) => ({ ...p, city: text })); }}
+                    onChangeText={(text) => {
+                      setCityTyping(true);
+                      setCitySelected(false);
+                      setCityQuery(text);
+                      setForm((p) => ({ ...p, city: text }));
+                    }}
                   />
-                  {errors.city && <Text style={fieldStyles.errorText}>{errors.city}</Text>}
+                  {errors.city && (
+                    <Text style={fieldStyles.errorText}>{errors.city}</Text>
+                  )}
                   {cityResults.length > 0 && (
                     <View style={styles.cityDropdown}>
-                      <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={{ maxHeight: 200 }}>
+                      <ScrollView
+                        nestedScrollEnabled
+                        keyboardShouldPersistTaps="handled"
+                        style={{ maxHeight: 200 }}
+                      >
                         {cityResults.map((item) => (
-                          <TouchableOpacity key={item.place_id} style={styles.cityDropdownItem} onPress={() => fetchPlaceDetails(item.place_id)}>
-                            <MaterialIcons name="location-on" size={14} color={Colors.light.outline} style={{ marginRight: 6, marginTop: 1 }} />
-                            <Text style={styles.cityDropdownText} numberOfLines={1}>{item.description}</Text>
+                          <TouchableOpacity
+                            key={item.place_id}
+                            style={styles.cityDropdownItem}
+                            onPress={() => fetchPlaceDetails(item.place_id)}
+                          >
+                            <MaterialIcons
+                              name="location-on"
+                              size={14}
+                              color={Colors.light.outline}
+                              style={{ marginRight: 6, marginTop: 1 }}
+                            />
+                            <Text
+                              style={styles.cityDropdownText}
+                              numberOfLines={1}
+                            >
+                              {item.description}
+                            </Text>
                           </TouchableOpacity>
                         ))}
                       </ScrollView>
@@ -527,11 +637,15 @@ export default function PersonalDetailsScreen() {
                 <Text style={fieldStyles.requiredStar}>*</Text>
               </View>
               <TextInput
-                value={form.state} editable={false}
-                placeholder="Auto-filled from city" placeholderTextColor={Colors.light.outline}
+                value={form.state}
+                editable={false}
+                placeholder="Auto-filled from city"
+                placeholderTextColor={Colors.light.outline}
                 style={[fieldStyles.input, { backgroundColor: "#E5E7EB" }]}
               />
-              {errors.state && <Text style={fieldStyles.errorText}>{errors.state}</Text>}
+              {errors.state && (
+                <Text style={fieldStyles.errorText}>{errors.state}</Text>
+              )}
             </View>
 
             {/* PIN Code */}
@@ -542,19 +656,32 @@ export default function PersonalDetailsScreen() {
               </View>
               {isEditing ? (
                 <TextInput
-                  value={form.pinCode} keyboardType="number-pad" placeholder="Enter PIN"
-                  placeholderTextColor={Colors.light.outline} maxLength={6}
-                  style={[fieldStyles.input, errors.pinCode ? fieldStyles.inputError : null]}
+                  value={form.pinCode}
+                  keyboardType="number-pad"
+                  placeholder="Enter PIN"
+                  placeholderTextColor={Colors.light.outline}
+                  maxLength={6}
+                  style={[
+                    fieldStyles.input,
+                    errors.pinCode ? fieldStyles.inputError : null,
+                  ]}
                   onChangeText={(text) => {
                     const value = text.replace(/[^0-9]/g, "").slice(0, 6);
                     setForm((p) => ({ ...p, pinCode: value }));
-                    if (value.length === 6) setErrors((prev) => { const copy = { ...prev }; delete copy.pinCode; return copy; });
+                    if (value.length === 6)
+                      setErrors((prev) => {
+                        const copy = { ...prev };
+                        delete copy.pinCode;
+                        return copy;
+                      });
                   }}
                 />
               ) : (
                 <Text style={fieldStyles.valueText}>{form.pinCode || "—"}</Text>
               )}
-              {errors.pinCode && <Text style={fieldStyles.errorText}>{errors.pinCode}</Text>}
+              {errors.pinCode && (
+                <Text style={fieldStyles.errorText}>{errors.pinCode}</Text>
+              )}
             </View>
           </View>
 
@@ -562,6 +689,9 @@ export default function PersonalDetailsScreen() {
           <Text style={styles.sectionLabel}>HOSPITAL IMAGES</Text>
           <View style={styles.section}>
             <View style={styles.imageGrid}>
+              {/* ── FIX (Issue 2): Render exactly MAX_IMAGES (3) fixed slots.
+                   The dynamic "+" add-more slot is removed entirely.
+                   Each empty slot acts as its own add button in edit mode. ── */}
               {Array.from({ length: imageSlots }).map((_, i) => {
                 const uri = images[i];
                 return (
@@ -592,20 +722,12 @@ export default function PersonalDetailsScreen() {
                   </TouchableOpacity>
                 );
               })}
-              {isEditing && (
-                <TouchableOpacity
-                  style={[styles.imageSlot, styles.imageAddSlot]}
-                  onPress={() => promptImageSource(images.length)}
-                  activeOpacity={0.8}
-                >
-                  <MaterialIcons name="add" size={28} color={Colors.light.primary} />
-                </TouchableOpacity>
-              )}
+              {/* ── FIX (Issue 2): Extra "+" slot removed — no unbounded growth ── */}
             </View>
             {errors.images && <Text style={styles.imageError}>{errors.images}</Text>}
             <Text style={styles.imageHint}>
               {isEditing
-                ? `Minimum ${MIN_IMAGES} images required · max 200KB each`
+                ? `${MIN_IMAGES} images required · max 200KB each`
                 : `${images.length} image${images.length !== 1 ? "s" : ""}`}
             </Text>
           </View>
@@ -615,18 +737,42 @@ export default function PersonalDetailsScreen() {
           <View style={styles.section}>
             <View style={styles.mapContainer}>
               <GoogleMapPicker
-                city={form.city} state={form.state} pin={form.pinCode} address1={form.addressLine1}
+                city={form.city}
+                state={form.state}
+                pin={form.pinCode}
+                address1={form.addressLine1}
                 onLocationSelect={(lat, lng, pin) => {
-                  setForm((prev) => ({ ...prev, latitude: String(lat), longitude: String(lng), ...(pin ? { pinCode: pin } : {}) }));
+                  setForm((prev) => ({
+                    ...prev,
+                    latitude: String(lat),
+                    longitude: String(lng),
+                    ...(pin ? { pinCode: pin } : {}),
+                  }));
                 }}
               />
             </View>
             <View style={styles.row2}>
               <View style={{ flex: 1 }}>
-                <InputField label="Latitude" value={form.latitude} onChangeText={(v) => update("latitude", v)} keyboardType="numeric" editable={isEditing} required error={errors.latitude} />
+                <InputField
+                  label="Latitude"
+                  value={form.latitude}
+                  onChangeText={(v) => update("latitude", v)}
+                  keyboardType="numeric"
+                  editable={isEditing}
+                  required
+                  error={errors.latitude}
+                />
               </View>
               <View style={{ flex: 1 }}>
-                <InputField label="Longitude" value={form.longitude} onChangeText={(v) => update("longitude", v)} keyboardType="numeric" editable={isEditing} required error={errors.longitude} />
+                <InputField
+                  label="Longitude"
+                  value={form.longitude}
+                  onChangeText={(v) => update("longitude", v)}
+                  keyboardType="numeric"
+                  editable={isEditing}
+                  required
+                  error={errors.longitude}
+                />
               </View>
             </View>
           </View>
@@ -634,10 +780,42 @@ export default function PersonalDetailsScreen() {
           {/* CONTACT */}
           <Text style={styles.sectionLabel}>CONTACT INFORMATION</Text>
           <View style={styles.section}>
-            <InputField label="Email" value={form.email} onChangeText={(v) => update("email", v)} keyboardType="email-address" autoCapitalize="none" editable={isEditing} required error={errors.email} />
-            <InputField label="Mobile Number" value={form.mobile} onChangeText={(v) => update("mobile", v)} keyboardType="phone-pad" editable={isEditing} required error={errors.mobile} />
-            <InputField label="Alternate Mobile" value={form.altMobile} onChangeText={(v) => update("altMobile", v)} keyboardType="phone-pad" editable={isEditing} />
-            <InputField label="Landline" value={form.landline} onChangeText={(v) => update("landline", v)} keyboardType="phone-pad" editable={isEditing} />
+            <InputField
+              label="Email"
+              value={form.email}
+              onChangeText={(v) => update("email", v)}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              editable={isEditing}
+              required
+              error={errors.email}
+            />
+            <InputField
+              label="Mobile Number"
+              value={form.mobile}
+              onChangeText={(v) => update("mobile", v)}
+              keyboardType="phone-pad"
+              editable={isEditing}
+              required
+              maxLength={10}
+              error={errors.mobile}
+            />
+            <InputField
+              label="Alternate Mobile"
+              value={form.altMobile}
+              onChangeText={(v) => update("altMobile", v)}
+              keyboardType="phone-pad"
+              editable={isEditing}
+              maxLength={10}
+            />
+            <InputField
+              label="Landline"
+              value={form.landline}
+              onChangeText={(v) => update("landline", v)}
+              keyboardType="phone-pad"
+              editable={isEditing}
+              maxLength={10}
+            />
           </View>
 
           {/* ABOUT US */}
@@ -650,15 +828,26 @@ export default function PersonalDetailsScreen() {
             {isEditing ? (
               <>
                 <TextInput
-                  style={[styles.aboutInput, { fontFamily: FontFamily.body }, errors.aboutUs ? styles.inputError : null]}
+                  style={[
+                    styles.aboutInput,
+                    { fontFamily: FontFamily.body },
+                    errors.aboutUs ? styles.inputError : null,
+                  ]}
                   value={form.aboutUs}
-                  onChangeText={(v) => { if (v.length <= 1000) update("aboutUs", v); }}
-                  multiline textAlignVertical="top"
+                  onChangeText={(v) => {
+                    if (v.length <= 1000) update("aboutUs", v);
+                  }}
+                  multiline
+                  textAlignVertical="top"
                   placeholder="Tell patients about your hospital..."
                   placeholderTextColor={Colors.light.outline}
                 />
-                <Text style={styles.charCount}>{form.aboutUs.length} / 1000</Text>
-                {errors.aboutUs && <Text style={fieldStyles.errorText}>{errors.aboutUs}</Text>}
+                <Text style={styles.charCount}>
+                  {form.aboutUs.length} / 1000
+                </Text>
+                {errors.aboutUs && (
+                  <Text style={fieldStyles.errorText}>{errors.aboutUs}</Text>
+                )}
               </>
             ) : (
               <Text style={styles.aboutReadOnly}>{form.aboutUs || "—"}</Text>
@@ -666,9 +855,31 @@ export default function PersonalDetailsScreen() {
           </View>
 
           {statusMsg && (
-            <View style={[styles.banner, statusMsg.ok ? styles.bannerOk : styles.bannerErr]}>
-              <MaterialIcons name={statusMsg.ok ? "check-circle" : "error-outline"} size={16} color={statusMsg.ok ? Colors.light.tertiary : Colors.light.error} />
-              <Text style={[styles.bannerText, { color: statusMsg.ok ? Colors.light.tertiary : Colors.light.error }]}>{statusMsg.text}</Text>
+            <View
+              style={[
+                styles.banner,
+                statusMsg.ok ? styles.bannerOk : styles.bannerErr,
+              ]}
+            >
+              <MaterialIcons
+                name={statusMsg.ok ? "check-circle" : "error-outline"}
+                size={16}
+                color={
+                  statusMsg.ok ? Colors.light.tertiary : Colors.light.error
+                }
+              />
+              <Text
+                style={[
+                  styles.bannerText,
+                  {
+                    color: statusMsg.ok
+                      ? Colors.light.tertiary
+                      : Colors.light.error,
+                  },
+                ]}
+              >
+                {statusMsg.text}
+              </Text>
             </View>
           )}
 
@@ -678,16 +889,43 @@ export default function PersonalDetailsScreen() {
 
       {isEditing && (
         <View style={styles.updateBar}>
-          <TouchableOpacity style={styles.updateBtn} onPress={handleUpdate} disabled={saving} activeOpacity={0.85}>
-            {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.updateBtnText}>Update</Text>}
+          <TouchableOpacity
+            style={styles.updateBtn}
+            onPress={handleUpdate}
+            disabled={saving}
+            activeOpacity={0.85}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.updateBtnText}>Update</Text>
+            )}
           </TouchableOpacity>
         </View>
       )}
 
-      <Modal visible={!!viewingImageUri} transparent animationType="fade" onRequestClose={() => setViewingImageUri(null)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setViewingImageUri(null)}>
-          {viewingImageUri && <Image source={{ uri: viewingImageUri }} style={styles.fullImage} resizeMode="contain" />}
-          <TouchableOpacity style={styles.modalClose} onPress={() => setViewingImageUri(null)}>
+      <Modal
+        visible={!!viewingImageUri}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewingImageUri(null)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setViewingImageUri(null)}
+        >
+          {viewingImageUri && (
+            <Image
+              source={{ uri: viewingImageUri }}
+              style={styles.fullImage}
+              resizeMode="contain"
+            />
+          )}
+          <TouchableOpacity
+            style={styles.modalClose}
+            onPress={() => setViewingImageUri(null)}
+          >
             <MaterialIcons name="close" size={24} color="#fff" />
           </TouchableOpacity>
         </TouchableOpacity>
@@ -709,12 +947,27 @@ export default function PersonalDetailsScreen() {
 
 // ── InputField ────────────────────────────────────────────────────────────────
 function InputField({
-  label, value, onChangeText, placeholder, keyboardType, autoCapitalize,
-  editable = true, required = false, error,
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  keyboardType,
+  autoCapitalize,
+  editable = true,
+  required = false,
+  error,
+  maxLength,
 }: {
-  label: string; value: string; onChangeText: (v: string) => void;
-  placeholder?: string; keyboardType?: any; autoCapitalize?: any;
-  editable?: boolean; required?: boolean; error?: string;
+  label: string;
+  value: string;
+  onChangeText: (v: string) => void;
+  placeholder?: string;
+  keyboardType?: any;
+  autoCapitalize?: any;
+  editable?: boolean;
+  required?: boolean;
+  error?: string;
+  maxLength?: number;
 }) {
   return (
     <View style={fieldStyles.wrap}>
@@ -725,9 +978,13 @@ function InputField({
       {editable ? (
         <TextInput
           style={[fieldStyles.input, error ? fieldStyles.inputError : null]}
-          value={value} placeholder={placeholder ?? label}
-          placeholderTextColor={Colors.light.outline} onChangeText={onChangeText}
-          keyboardType={keyboardType ?? "default"} autoCapitalize={autoCapitalize ?? "sentences"}
+          value={value}
+          placeholder={placeholder ?? label}
+          placeholderTextColor={Colors.light.outline}
+          onChangeText={onChangeText}
+          keyboardType={keyboardType ?? "default"}
+          autoCapitalize={autoCapitalize ?? "sentences"}
+          maxLength={maxLength}
         />
       ) : (
         <Text style={fieldStyles.valueText}>{value || "—"}</Text>
@@ -739,100 +996,264 @@ function InputField({
 
 const fieldStyles = StyleSheet.create({
   wrap: { marginBottom: Spacing.sm },
-  labelRow: { flexDirection: "row", alignItems: "center", gap: 3, marginBottom: 4 },
-  label: { fontFamily: FontFamily.bodyMedium, fontSize: FontSize.labelMedium, color: Colors.light.onSurfaceVariant },
-  requiredStar: { color: Colors.light.error, fontSize: FontSize.labelMedium, fontFamily: FontFamily.bodyMedium },
-  errorText: { color: Colors.light.error, fontSize: FontSize.labelSmall, fontFamily: FontFamily.body, marginTop: 4 },
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    marginBottom: 4,
+  },
+  label: {
+    fontFamily: FontFamily.bodyMedium,
+    fontSize: FontSize.labelMedium,
+    color: Colors.light.onSurfaceVariant,
+  },
+  requiredStar: {
+    color: Colors.light.error,
+    fontSize: FontSize.labelMedium,
+    fontFamily: FontFamily.bodyMedium,
+  },
+  errorText: {
+    color: Colors.light.error,
+    fontSize: FontSize.labelSmall,
+    fontFamily: FontFamily.body,
+    marginTop: 4,
+  },
   input: {
-    backgroundColor: Colors.light.surfaceContainerLow, borderRadius: Radius.lg,
-    paddingHorizontal: Spacing.md, paddingVertical: 14,
-    fontFamily: FontFamily.body, fontSize: FontSize.bodyMedium, color: Colors.light.onSurface,
+    backgroundColor: AmbColors.surfaceContainerLow,
+    borderRadius: AmbRadius.md,
+    paddingHorizontal: 14,
+    height: 50,
+    justifyContent: "center",
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    color: AmbColors.onSurface,
   },
   inputError: { borderWidth: 1, borderColor: Colors.light.error },
-  valueText: { fontFamily: FontFamily.body, fontSize: FontSize.bodyMedium, color: Colors.light.onSurface, paddingVertical: 6 },
+  valueText: {
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.bodyMedium,
+    color: Colors.light.onSurface,
+    paddingVertical: 6,
+  },
 });
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.light.surface },
   centered: { flex: 1, justifyContent: "center", alignItems: "center" },
   header: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
     backgroundColor: Colors.light.surfaceContainerLowest,
-    borderBottomWidth: 1, borderBottomColor: Colors.light.outlineVariant,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.outlineVariant,
   },
-  backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center", borderRadius: Radius.full },
-  headerTitle: { fontFamily: FontFamily.headline, fontSize: FontSize.titleLarge, color: Colors.light.onSurface },
-  editBtn: { minWidth: 60, height: 40, alignItems: "center", justifyContent: "center", paddingHorizontal: Spacing.sm },
-  editBtnText: { fontFamily: FontFamily.bodyMedium, fontSize: FontSize.bodyMedium, color: Colors.light.primary },
+  backBtn: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: Radius.full,
+  },
+  headerTitle: {
+    fontFamily: FontFamily.headline,
+    fontSize: FontSize.titleLarge,
+    color: Colors.light.onSurface,
+  },
+  editBtn: {
+    minWidth: 60,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: Spacing.sm,
+  },
+  editBtnText: {
+    fontFamily: FontFamily.bodyMedium,
+    fontSize: FontSize.bodyMedium,
+    color: Colors.light.primary,
+  },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: Spacing.md, paddingTop: Spacing.md },
   sectionLabel: {
-    fontFamily: FontFamily.label, fontSize: FontSize.labelSmall,
-    color: Colors.light.outline, letterSpacing: 1,
-    marginBottom: Spacing.sm, marginTop: Spacing.sm,
+    fontFamily: FontFamily.label,
+    fontSize: FontSize.labelSmall,
+    color: Colors.light.outline,
+    letterSpacing: 1,
+    marginBottom: Spacing.sm,
+    marginTop: Spacing.sm,
   },
   section: {
-    backgroundColor: Colors.light.surfaceContainerLowest, borderRadius: Radius.xl,
-    padding: Spacing.md, marginBottom: Spacing.sm, ...Shadow.subtle,
+    backgroundColor: Colors.light.surfaceContainerLowest,
+    borderRadius: Radius.xl,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+    ...Shadow.subtle,
   },
   row2: { flexDirection: "row", gap: Spacing.sm },
   cityDropdown: {
-    backgroundColor: "#fff", borderRadius: Radius.lg, marginTop: 4,
-    elevation: 6, shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12, shadowRadius: 6, zIndex: 9999, overflow: "hidden",
+    backgroundColor: "#fff",
+    borderRadius: Radius.lg,
+    marginTop: 4,
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    zIndex: 9999,
+    overflow: "hidden",
   },
   cityDropdownItem: {
-    flexDirection: "row", alignItems: "flex-start",
-    paddingHorizontal: Spacing.md, paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: Colors.light.outlineVariant,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.outlineVariant,
   },
-  cityDropdownText: { flex: 1, fontFamily: FontFamily.body, fontSize: FontSize.bodySmall, color: Colors.light.onSurface },
-  imageGrid: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginBottom: Spacing.xs },
-  imageSlot: { width: 96, height: 96, borderRadius: Radius.lg, overflow: "hidden", backgroundColor: Colors.light.surfaceContainerLow },
+  cityDropdownText: {
+    flex: 1,
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.bodySmall,
+    color: Colors.light.onSurface,
+  },
+  imageGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginBottom: Spacing.xs,
+  },
+  imageSlot: {
+    width: 96,
+    height: 96,
+    borderRadius: Radius.lg,
+    overflow: "hidden",
+    backgroundColor: Colors.light.surfaceContainerLow,
+  },
   imageThumb: { width: "100%", height: "100%" },
   imageEditOverlay: {
-    position: "absolute", bottom: 0, right: 0,
-    backgroundColor: "rgba(0,0,0,0.5)", padding: 4, borderTopLeftRadius: Radius.sm,
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    padding: 4,
+    borderTopLeftRadius: Radius.sm,
   },
   imagePlaceholder: {
-    flex: 1, alignItems: "center", justifyContent: "center",
-    borderWidth: 1.5, borderColor: Colors.light.outlineVariant,
-    borderRadius: Radius.lg, borderStyle: "dashed", gap: 4,
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: Colors.light.outlineVariant,
+    borderRadius: Radius.lg,
+    borderStyle: "dashed",
+    gap: 4,
   },
-  imagePlaceholderText: { fontFamily: FontFamily.body, fontSize: FontSize.labelSmall, color: Colors.light.outline },
+  imagePlaceholderText: {
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.labelSmall,
+    color: Colors.light.outline,
+  },
   imageAddSlot: {
-    alignItems: "center", justifyContent: "center",
-    borderWidth: 1.5, borderColor: Colors.light.primary,
-    borderStyle: "dashed", backgroundColor: Colors.light.primaryFixed + "30",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: Colors.light.primary,
+    borderStyle: "dashed",
+    backgroundColor: Colors.light.primaryFixed + "30",
   },
-  imageError: { color: Colors.light.error, fontSize: FontSize.labelSmall, fontFamily: FontFamily.body, marginTop: 4 },
-  imageHint: { fontFamily: FontFamily.body, fontSize: FontSize.labelSmall, color: Colors.light.outline, marginTop: 4 },
-  mapContainer: { height: 220, borderRadius: Radius.lg, overflow: "hidden", marginBottom: Spacing.sm },
+  imageError: {
+    color: Colors.light.error,
+    fontSize: FontSize.labelSmall,
+    fontFamily: FontFamily.body,
+    marginTop: 4,
+  },
+  imageHint: {
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.labelSmall,
+    color: Colors.light.outline,
+    marginTop: 4,
+  },
+  mapContainer: {
+    height: 220,
+    borderRadius: Radius.lg,
+    overflow: "hidden",
+    marginBottom: Spacing.sm,
+  },
   aboutInput: {
-    backgroundColor: Colors.light.surfaceContainerLow, borderRadius: Radius.lg,
-    padding: Spacing.md, fontSize: FontSize.bodyMedium, color: Colors.light.onSurface,
-    minHeight: 120, textAlignVertical: "top",
+    backgroundColor: Colors.light.surfaceContainerLow,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    fontSize: FontSize.bodyMedium,
+    color: Colors.light.onSurface,
+    minHeight: 120,
+    textAlignVertical: "top",
   },
   inputError: { borderWidth: 1, borderColor: Colors.light.error },
-  charCount: { fontFamily: FontFamily.body, fontSize: FontSize.labelSmall, color: Colors.light.outline, textAlign: "right", marginTop: 4 },
-  aboutReadOnly: { fontFamily: FontFamily.body, fontSize: FontSize.bodyMedium, color: Colors.light.onSurface, lineHeight: 22 },
-  banner: { flexDirection: "row", alignItems: "center", gap: Spacing.xs, marginTop: Spacing.md, padding: Spacing.sm, borderRadius: Radius.lg },
+  charCount: {
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.labelSmall,
+    color: Colors.light.outline,
+    textAlign: "right",
+    marginTop: 4,
+  },
+  aboutReadOnly: {
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.bodyMedium,
+    color: Colors.light.onSurface,
+    lineHeight: 22,
+  },
+  banner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    marginTop: Spacing.md,
+    padding: Spacing.sm,
+    borderRadius: Radius.lg,
+  },
   bannerOk: { backgroundColor: Colors.light.tertiaryFixed + "40" },
   bannerErr: { backgroundColor: Colors.light.errorContainer },
-  bannerText: { fontFamily: FontFamily.bodyMedium, fontSize: FontSize.bodySmall, flex: 1 },
-  updateBar: {
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
-    backgroundColor: Colors.light.surfaceContainerLowest,
-    borderTopWidth: 1, borderTopColor: Colors.light.outlineVariant,
+  bannerText: {
+    fontFamily: FontFamily.bodyMedium,
+    fontSize: FontSize.bodySmall,
+    flex: 1,
   },
-  updateBtn: { backgroundColor: "#16A34A", borderRadius: Radius.lg, height: ButtonSize.minHeight, alignItems: "center", justifyContent: "center" },
-  updateBtnText: { fontFamily: FontFamily.bodySemiBold, fontSize: FontSize.bodyMedium, color: "#fff" },
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.92)", justifyContent: "center", alignItems: "center" },
+  updateBar: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    backgroundColor: Colors.light.surfaceContainerLowest,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.outlineVariant,
+  },
+  updateBtn: {
+    backgroundColor: "#16A34A",
+    borderRadius: Radius.lg,
+    height: ButtonSize.minHeight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  updateBtnText: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: FontSize.bodyMedium,
+    color: "#fff",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
   fullImage: { width: "100%", height: "80%" },
   modalClose: {
-    position: "absolute", top: 48, right: 16, width: 40, height: 40,
-    borderRadius: Radius.full, backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center", justifyContent: "center",
+    position: "absolute",
+    top: 48,
+    right: 16,
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
