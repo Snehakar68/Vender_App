@@ -44,42 +44,48 @@ export default function ProfileScreen() {
   useEffect(() => {
     loadProfile();
   }, [vendorId]);
+ const loadProfile = async () => {
+    if (!vendorId) {
+      setProfileLoading(false);
+      return;
+    }
 
-  const loadProfile = async () => {
-    // 1. Try AsyncStorage cache first
     try {
-      const cached = await AsyncStorage.getItem(HOSPITAL_PROFILE_KEY);
-      if (cached) {
-        const { hospitalName: name, profileImage: img } = JSON.parse(cached);
-        if (name) {
-          setHospitalName(name);
-          setProfileImage(img ?? null);
-          setProfileLoading(false);
-          return;
-        }
-      }
-    } catch (_) {}
-
-    // 2. Fallback to API
-    if (!vendorId) { setProfileLoading(false); return; }
-    try {
-      const res = await api.get(`/api/Hospital/GetHosPersonnelInfoById/${vendorId}`);
-      const apiData = res.data?.data;
-      const name: string = apiData?.hospital?.full_name ?? "";
-      const rawPhotos: string[] = Array.isArray(apiData?.photos) ? apiData.photos : [];
-      const img: string | null = rawPhotos.length > 0
-        ? `data:image/png;base64,${rawPhotos[0]}`
-        : null;
-      setHospitalName(name);
-      setProfileImage(img);
-      await AsyncStorage.setItem(
-        HOSPITAL_PROFILE_KEY,
-        JSON.stringify({ hospitalName: name, profileImage: img })
+      const res = await api.get(
+        `/api/Hospital/GetHosp_APP/${vendorId}`
       );
-    } catch (_) {}
+
+      console.log("API FULL RESPONSE:", res.data);
+
+      const hospital = res.data?.data?.[0]; // ✅ correct parsing
+
+      if (hospital) {
+        const name = hospital.full_name || "";
+
+        // ✅ handle base64 image correctly
+        const image = hospital.photo
+          ? `data:image/png;base64,${hospital.photo}`
+          : null;
+
+        setHospitalName(name);
+        setProfileImage(image);
+
+        // cache
+        await AsyncStorage.setItem(
+          HOSPITAL_PROFILE_KEY,
+          JSON.stringify({
+            hospitalName: name,
+            profileImage: image,
+          })
+        );
+      }
+    } catch (error) {
+      console.log("API ERROR:", error);
+    }
+
     setProfileLoading(false);
   };
-
+  
   async function handleSignOut() {
     await auth?.logout();
   }
@@ -105,7 +111,6 @@ export default function ProfileScreen() {
                 <Image
                   source={{ uri: profileImage }}
                   style={styles.avatarImage}
-                  resizeMode="cover"
                 />
               ) : (
                 <Text style={styles.avatarInitials}>{initials}</Text>
