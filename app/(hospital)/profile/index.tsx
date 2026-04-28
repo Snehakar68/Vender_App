@@ -40,20 +40,19 @@ export default function ProfileScreen() {
   const [hospitalName, setHospitalName] = useState("");
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
-
+  const [city, setCity] = useState("");
+  const [stateName, setStateName] = useState("");
   useEffect(() => {
     loadProfile();
   }, [vendorId]);
- const loadProfile = async () => {
+  const loadProfile = async () => {
     if (!vendorId) {
       setProfileLoading(false);
       return;
     }
 
     try {
-      const res = await api.get(
-        `/api/Hospital/GetHosp_APP/${vendorId}`
-      );
+      const res = await api.get(`/api/Hospital/GetHosp_APP/${vendorId}`);
 
       console.log("API FULL RESPONSE:", res.data);
 
@@ -69,6 +68,8 @@ export default function ProfileScreen() {
 
         setHospitalName(name);
         setProfileImage(image);
+        setCity(hospital.city || "");
+        setStateName(hospital.state || "");
 
         // cache
         await AsyncStorage.setItem(
@@ -76,7 +77,7 @@ export default function ProfileScreen() {
           JSON.stringify({
             hospitalName: name,
             profileImage: image,
-          })
+          }),
         );
       }
     } catch (error) {
@@ -85,7 +86,7 @@ export default function ProfileScreen() {
 
     setProfileLoading(false);
   };
-  
+
   async function handleSignOut() {
     await auth?.logout();
   }
@@ -123,7 +124,9 @@ export default function ProfileScreen() {
           ) : (
             <Text style={styles.name}>{displayName}</Text>
           )}
-          <Text style={styles.designation}>Partner Hospital</Text>
+          <Text style={styles.designation}>
+            {city || stateName ? `${city}, ${stateName}` : null}
+          </Text>
 
           <TouchableOpacity
             style={styles.detailsBtn}
